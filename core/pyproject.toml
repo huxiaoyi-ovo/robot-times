@@ -1,0 +1,30 @@
+[project]
+name = "robot-times"
+version = "0.1.0"
+description = "The Robot Times 核心库：论文抓取、打分、Zotero 本地 API 客户端，以及技术验证用的命令行工具"
+requires-python = ">=3.11"
+dependencies = [
+    "arxiv>=2.1",
+    "beautifulsoup4>=4.12",
+    "feedparser>=6.0.11",
+    "httpx>=0.27",
+    "json-repair>=0.30",
+    "numpy>=1.26",
+    "python-dotenv>=1.0",
+    "typer>=0.12",
+    "tzdata>=2024.1",  # Windows 没有系统时区库，zoneinfo 需要它
+]
+
+[project.optional-dependencies]
+# 本地语义向量模型。体积较大（会装 PyTorch），不装时自动退回到简单的词袋向量。
+embed = ["sentence-transformers>=3.0"]
+
+[project.scripts]
+robot-times = "robot_times.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robot_times"]

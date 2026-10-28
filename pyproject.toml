@@ -1,0 +1,35 @@
+[project]
+name = "robot-times-workspace"
+version = "0.0.0"
+description = "The Robot Timesworkspace root (not a published package)"
+requires-python = ">=3.11"
+dependencies = ["robot-times"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["core"]
+
+[tool.uv.sources]
+robot-times = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["core/tests", "server/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"] # 行宽交给 ruff format；中文长字符串不强行折行
+
+[tool.ruff.lint.per-file-ignores]
+"core/src/robot_times/cli.py" = ["B008"] # typer 的标准写法
+
+[tool.ruff.lint.isort]
+known-first-party = ["robot_times"]

@@ -1,0 +1,34 @@
+// The Robot Times 看板：静态页面 + /api（读写 D1、写入 Zotero、问 DeepSeek）
+// 部署：Cloudflare 里新建 Worker 项目，连接本仓库，根目录填 web/app（见 docs/dev/cloud-setup.md）。
+// 部署前把下面的 database_id 换成你自己的 D1 数据库 ID；GITHUB_REPO（你的仓库，例如 yourname/robot-times）在 Cloudflare 后台的变量里填。
+// 密钥（ZOTERO_API_KEY、DEEPSEEK_API_KEY 等）在 Cloudflare 后台“设置 → 变量和机密”里加，不要写进这里。
+{
+  "name": "robot-times",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  // 预览地址不受 Cloudflare Access 保护，关掉
+  "preview_urls": false,
+  // 部署时保留在后台手动加的变量（ALLOWED_EMAIL 等）
+  "keep_vars": true,
+  // 每 30 分钟：检查今天的推荐、业界简报、周报，缺了就触发 GitHub 上的任务；每 3 小时代抓一次被拒绝的订阅
+  // （见 src/index.js 的 scheduled）
+  "triggers": { "crons": ["10,40 * * * *"] },
+  "assets": {
+    "directory": "./public",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "robot-times",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "ZOTERO_API_BASE": "https://api.zotero.org",
+    "LLM_BASE_URL": "https://api.deepseek.com",
+    "LLM_MODEL": "deepseek-flash"
+  }
+}

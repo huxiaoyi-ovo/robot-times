@@ -1,0 +1,50 @@
+# 每周回顾：每周日北京时间 20:07 左右运行。也可以在 Actions 页面手动运行。
+name: weekly
+
+on:
+  schedule:
+    - cron: "7 12 * * 0" # UTC 周日 12:07 = 北京时间周日 20:07
+  workflow_dispatch:
+    inputs:
+      day:
+        description: "这一周里的任意一天（YYYY-MM-DD），留空就是本周"
+        required: false
+        default: ""
+
+concurrency:
+  group: robot-times-cloud
+  cancel-in-progress: false
+
+jobs:
+  # 没配置云端版（比如只用本地版、或者刚 fork）时整个任务跳过，不会每天报错
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.c.outputs.ok }}
+    steps:
+      - id: c
+        env:
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+        run: |
+          if [ -n "$D1_DATABASE_ID" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "没配置云端版（缺 D1_DATABASE_ID 等 Secrets），跳过。见 docs/dev/cloud-setup.md"; fi
+
+  weekly:
+    needs: check
+    if: needs.check.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: "1"
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: 生成本周回顾和下周计划
+        run: uv run --no-sync robot-times cloud weekly --day "${{ inputs.day }}"

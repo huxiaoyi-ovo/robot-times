@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+runs/
+*.db
+plugin/dist/
+.DS_Store
+node_modules/
+.wrangler/
+.dev.vars
