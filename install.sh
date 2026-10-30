@@ -84,7 +84,7 @@ ok "依赖装好了"
 
 # ---------- 3. Zotero ----------
 say "3/5 检查 Zotero"
-until curl -s -o /dev/null --noproxy localhost -m 3 "http://localhost:23119/api/"; do
+until curl -sf -o /dev/null --noproxy localhost -m 3 "http://localhost:23119/api/"; do  # 没勾选本地接口时返回 403
   warn "连不上 Zotero。请："
   echo "     1) 打开 Zotero（需要 10 或更新版本：帮助 → 关于 Zotero 里看版本号）"
   echo "     2) 编辑 → 设置（macOS 是 Zotero → 设置）→ 高级，勾选“允许此计算机上的其他应用程序与 Zotero 通信”"

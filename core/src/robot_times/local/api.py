@@ -593,7 +593,7 @@ class LocalApi:
         if self.llm_stream is None:
             raise ApiError(
                 400,
-                "还没配置大模型：在 ~/.robot-times/.env 里填 DEEPSEEK_API_KEY（或 ROBOT_TIMES_LLM_*）。",
+                "还没配置大模型：到“设置”页点“连接 Zotero、配大模型”，填上密钥就能用。",
             )
         p = self.paper(str(b.get("paperId") or ""))
         settings = repo.load_settings(self.store)

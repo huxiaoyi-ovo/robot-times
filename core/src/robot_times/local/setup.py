@@ -269,6 +269,12 @@ class Setup:
         changes = {
             k: b[k] for k in ("interests", "categories", "preset", "zoteroCollection") if k in b
         }
+        cats = changes.get("categories")
+        if isinstance(cats, list) and cats and "preset" not in changes:
+            # 网页上只填了分类：有 cs.RO 用机器人预设，没有就换成通用预设（报名、写作人设跟着换）
+            changes["preset"] = (
+                "robotics" if any(str(c).startswith("cs.RO") for c in cats) else "general"
+            )
         s = repo.update_settings(repo.load_settings(self.store), changes)
         repo.save_settings(self.store, s)
         repo.set_json(self.store, "setup", {"done": True, "at": repo.now_iso()})

@@ -100,3 +100,10 @@ def test_prepare_takes_over_a_lock_left_by_a_killed_run(boot, monkeypatch):
     os.utime(lock, (old, old))
     boot.prepare(log=lambda m: None)
     assert boot.version(boot.APP) == (0, 2, 0) and not lock.exists()
+
+
+def test_half_copied_code_is_copied_again(boot):
+    boot.ensure_app(log=lambda m: None)
+    (boot.APP / ".copied").unlink()  # 模拟复制到一半被关掉
+    assert boot.needs_prepare()
+    assert boot.ensure_app(log=lambda m: None) is True and boot.code_ready()

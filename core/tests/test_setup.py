@@ -208,3 +208,20 @@ def test_old_command_line_installs_count_as_set_up(env):
     (env / "zotero_key").write_text("K")
     repo.save_settings(st.store, {**repo.load_settings(st.store), "interests": "x"})
     assert st.done()
+
+
+def test_finish_picks_preset_from_categories(env):
+    api, _ = make(env, zotero())
+    call(
+        api,
+        "POST",
+        "/api/setup/finish",
+        {"interests": "扩散模型", "categories": ["cs.LG", "cs.CV"]},
+    )
+    s = repo.load_settings(api.store)
+    assert s["preset"] == "general" and s["categories"] == ["cs.LG", "cs.CV"]
+    call(api, "POST", "/api/setup/finish", {"interests": "四足", "categories": ["cs.RO"]})
+    assert repo.load_settings(api.store)["preset"] == "robotics"
+    call(api, "POST", "/api/setup/finish",
+         {"interests": "x", "categories": ["cs.LG"], "preset": "robotics"})  # fmt: skip
+    assert repo.load_settings(api.store)["preset"] == "robotics"  # 明确给了就听它的

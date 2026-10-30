@@ -56,10 +56,12 @@ def version(app: Path) -> tuple[int, ...]:
 def ensure_app(log=print) -> bool:
     """把安装包里的代码复制到用户目录（没有，或者安装包里的更新时）。返回是否复制了。"""
     src = PAYLOAD / "app"
-    if (APP / "core").exists() and version(APP) >= version(src):
+    if code_ready():
         return False
     log(f"准备代码：{APP}")
     APP.mkdir(parents=True, exist_ok=True)
+    done = APP / ".copied"  # 复制完才写：复制到一半被关掉，下次重新复制
+    done.unlink(missing_ok=True)
     for name in CODE:
         s, d = src / name, APP / name
         if not s.exists():
@@ -72,7 +74,15 @@ def ensure_app(log=print) -> bool:
             shutil.copytree(s, d)
         else:
             shutil.copy2(s, d)
+    done.write_text("ok")
     return True
+
+
+def code_ready() -> bool:
+    """用户目录里有完整的代码，并且不比安装包里的旧（看板自己更新过的会更新）。"""
+    mine, packaged = version(APP), version(PAYLOAD / "app")
+    # 比安装包新，只可能是看板自己更新过（复制到一半的代码版本和安装包一样）
+    return mine > packaged or (mine == packaged and (APP / ".copied").exists())
 
 
 def venv_python() -> Path:
@@ -115,9 +125,7 @@ def ensure_env(log=print) -> None:
 
 
 def needs_prepare() -> bool:
-    return not (
-        (APP / "core").exists() and version(APP) >= version(PAYLOAD / "app") and env_ready()
-    )
+    return not (code_ready() and env_ready())
 
 
 def prepare(log=print) -> None:

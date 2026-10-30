@@ -1341,7 +1341,7 @@ async function loadSetup(){
   if(z?.authorized && !SU.folders){ api("/api/setup/collections").then(f=>{ SU.folders=f; render(); }).catch(()=>{}); }
   if(z?.localApi && z?.versionOk!==false){ clearInterval(SU.timer); SU.timer=null; }
   else if(!SU.timer){ SU.timer=setInterval(()=>{ if(needsSetup()) loadSetup().then(render); }, 3000); }  // 一直检测，用户在 Zotero 里点好了就自动往下走
-  if(SU.st?.llm?.configured) SU.llmOk=true;
+  if(SU.st?.llm?.configured && !SU.llmRedo) SU.llmOk=true;
 }
 function viewSetup(){
   if(!SU.st){ loadSetup().then(render); return `<p class="mute">正在检测 Zotero……</p>`; }
@@ -1375,7 +1375,7 @@ function viewSetup(){
 
     <section class="step ${authOk?"ok":""} ${zOk?"":"off"}"><span class="n">${authOk?"✓":"2"}</span><div>
       <h2>允许它把论文加进 Zotero</h2>
-      ${authOk?`<p class="mute">已经允许了。</p>`:`<p>点下面的按钮后，切到 Zotero，在弹出的窗口里点 <b>Always Allow</b>（总是允许）。</p>
+      ${authOk?`<p class="mute">已经允许了。${SU.busy==="auth"?"等你在 Zotero 里点 Always Allow…":`加入 Zotero 时每次都弹窗，或者换了电脑上的 Zotero：<button class="btn link" data-su="auth" ${zOk&&!SU.busy?"":"disabled"}>重新连接</button>`}</p>${err("auth")}`:`<p>点下面的按钮后，切到 Zotero，在弹出的窗口里点 <b>Always Allow</b>（总是允许）。</p>
       <div class="actions"><button class="btn pri" data-su="auth" ${zOk&&!SU.busy?"":"disabled"}>${SU.busy==="auth"?"等你在 Zotero 里点 Always Allow…":"连接 Zotero"}</button></div>${err("auth")}`}
     </div></section>
 
@@ -1391,7 +1391,7 @@ function viewSetup(){
 
     <section class="step ${SU.llmOk?"ok":""} ${authOk?"":"off"}"><span class="n">${SU.llmOk?"✓":"4"}</span><div>
       <h2>大模型（可以跳过，但强烈建议）</h2>
-      ${SU.llmOk?`<p class="mute">已经配好了，可以写中文摘要、全文解读和“问 AI”。</p>`:`
+      ${SU.llmOk?`<p class="mute">已经配好了，可以写中文摘要、全文解读和“问 AI”。<button class="btn link" data-su="llmredo">换一个密钥或模型</button></p>`:`
       <p>有了它才有中文标题和摘要、全文解读、更准的排序和“问 AI”。默认用 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">DeepSeek</a>（注册后在 API keys 里创建密钥，充几块钱能用很久）。密钥只存在这台电脑上。</p>
       <label for="su-key">密钥</label><input type="text" id="su-key" placeholder="sk-…" autocomplete="off" value="${esc(d.key||"")}" ${authOk?"":"disabled"}>
       <details ${d.base||d.model?"open":""}><summary class="small">用其他 OpenAI 兼容的接口（包括本地 Ollama）</summary>
@@ -1418,7 +1418,7 @@ async function suAction(what){
   const d=SU.draft;
   const run=async(name, fn)=>{ SU.busy=name; render(); try{ await fn(); }catch(e){ SU.err[name]=e.message; } finally{ SU.busy=""; await loadSetup(); render(); } };
   if(what==="reopen"){  // 设置页里重新打开引导：重新连 Zotero、换大模型
-    Object.assign(SU,{st:null, folders:null, draft:{}, llmOk:false, llmSkip:false}); S.setup={done:false, reopened:true};
+    Object.assign(SU,{st:null, folders:null, draft:{}, llmOk:false, llmSkip:false, llmRedo:false}); S.setup={done:false, reopened:true};
     window.scrollTo(0,0); return render();
   }
   if(what==="cancel"){ clearInterval(SU.timer); SU.timer=null; S.setup={done:true}; return render(); }
@@ -1426,7 +1426,8 @@ async function suAction(what){
   if(what==="enable") return run("enable", async()=>{ await api("/api/setup/enable-api",{method:"POST"}); toast("已经打开了，现在重新打开 Zotero"); });
   if(what==="auth") return run("auth", async()=>{ await api("/api/setup/authorize",{method:"POST"}); SU.folders=null; S.features.zotero=true; toast("连上了"); });
   if(what==="skip"){ SU.llmSkip=true; return render(); }
-  if(what==="llm") return run("llm", async()=>{ await api("/api/setup/llm",{method:"PUT", body:JSON.stringify({key:d.key, base:d.base, model:d.model})}); SU.llmOk=true; S.features.ask=true; toast("大模型能用了"); });
+  if(what==="llmredo"){ SU.llmOk=false; SU.llmSkip=false; SU.llmRedo=true; return render(); }
+  if(what==="llm") return run("llm", async()=>{ await api("/api/setup/llm",{method:"PUT", body:JSON.stringify({key:d.key, base:d.base, model:d.model})}); SU.llmOk=true; SU.llmRedo=false; S.features.ask=true; toast("大模型能用了"); });
   if(what==="finish") return run("finish", async()=>{
     const cats=(d.categories||"").split(/[，,、\s]+/).map(x=>x.trim()).filter(Boolean);
     await api("/api/setup/finish",{method:"POST", body:JSON.stringify({interests:d.interests ?? SU.st.settings.interests, zoteroCollection:d.zoteroCollection ?? SU.st.settings.zoteroCollection ?? "", ...(cats.length?{categories:cats}:{})})});
