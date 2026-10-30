@@ -2,6 +2,7 @@
 
 import importlib.util
 import socket
+import threading
 import urllib.request
 from pathlib import Path
 
@@ -72,7 +73,18 @@ def test_preparing_page_shows_progress_and_is_not_the_dashboard(boot, monkeypatc
         get = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
         base = f"http://127.0.0.1:{boot.PORT}"
         assert "安装 Python 和依赖" in get(f"{base}/").read().decode()
-        assert get(f"{base}/status").read().decode() == "安装 Python 和依赖"
+        import json
+
+        assert json.loads(get(f"{base}/status").read())["status"] == "安装 Python 和依赖"
+        log = boot.HOME / "setup.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("error: 下载失败 sk-abcdef123456789\n")
+        prep.fail(boot.Failed("下载 Python 和依赖没成功", boot.NET_HINT, log))
+        st = json.loads(get(f"{base}/status").read())
+        assert st["failed"] and "网络" in st["hint"] and "下载失败" in st["log"]
+        assert "123456789" not in st["log"]  # 密钥打码
+        threading.Timer(0.2, prep.retry.set).start()  # 用户点了“重试”
+        assert prep.wait_retry(5) and prep.failed is None
         with pytest.raises(urllib.error.HTTPError):
             get(f"{base}/api/job")  # 页面靠这个判断看板起来没有
         assert boot.running() is False

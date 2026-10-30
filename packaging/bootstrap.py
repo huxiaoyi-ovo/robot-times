@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import html
+import json
 import os
 import re
 import shutil
@@ -27,6 +29,7 @@ WIN = os.name == "nt"
 HOME = Path(os.environ.get("ROBOT_TIMES_HOME") or Path.home() / ".robot-times")
 APP = HOME / "app"
 LOG = HOME / "serve.log"
+OUT = HOME / "serve.out"  # 看板进程的输出（启动时崩溃的报错在这里）
 PORT = int(os.environ.get("ROBOT_TIMES_PORT") or 8765)
 URL = f"http://localhost:{PORT}/"
 CODE = ("core", "web", ".claude", "pyproject.toml", "uv.lock", "README.md", "README.en.md",
@@ -120,7 +123,7 @@ def ensure_env(log=print) -> None:
             stdout=out, stderr=subprocess.STDOUT, env=_env(), **_hidden(),
         )  # fmt: skip
     if r.returncode != 0:
-        raise SystemExit(f"安装依赖失败，详情见 {HOME / 'setup.log'}。请检查网络后重新打开。")
+        raise Failed("下载 Python 和依赖没成功", NET_HINT, HOME / "setup.log")
     marker().write_text(lock_id())
 
 
@@ -156,7 +159,9 @@ def prepare(log=print) -> None:
 
 def _env() -> dict[str, str]:
     env = dict(os.environ)
-    env.update({"PYTHONUTF8": "1", "ROBOT_TIMES_UV": uv(), "ROBOT_TIMES_PACKAGED": "1"})
+    launcher = PAYLOAD / ("launch.vbs" if WIN else "launch")  # 看板设置页里开关“开机自动启动”时用
+    env.update({"PYTHONUTF8": "1", "ROBOT_TIMES_UV": uv(), "ROBOT_TIMES_PACKAGED": "1",
+                "ROBOT_TIMES_LAUNCHER": str(launcher)})  # fmt: skip
     return env
 
 
@@ -179,13 +184,24 @@ def running() -> bool:
 
 
 def spawn(cmd: list[str]) -> None:
-    kw: dict = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
-                "env": _env(), "cwd": str(APP)}  # fmt: skip
+    HOME.mkdir(parents=True, exist_ok=True)
+    # 看板还没开始写日志就崩了（比如代码不完整），报错也能看到。不写进 serve.log：Windows 上开着的文件没法轮换
+    out = open(OUT, "wb")  # 只留这一次启动的输出
+    kw: dict = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": out,
+        "stderr": out,
+        "env": _env(),
+        "cwd": str(APP),
+    }
     if WIN:
         kw["creationflags"] = 0x00000008 | 0x00000200 | 0x08000000
     else:
         kw["start_new_session"] = True
-    subprocess.Popen(cmd, **kw)  # noqa: S603
+    try:
+        subprocess.Popen(cmd, **kw)  # noqa: S603
+    finally:
+        out.close()
 
 
 def wait_running(seconds: float) -> bool:
@@ -201,30 +217,70 @@ def wait_running(seconds: float) -> bool:
 
 PAGE = """<!doctype html><html lang="zh-CN"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>The Robot Times</title>
-<style>body{font-family:system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif;max-width:560px;margin:18vh auto;padding:0 20px;color:#121212;background:#fff}
-h1{font-family:Georgia,serif;font-size:30px;margin:0 0 12px}p{color:#555;line-height:1.7}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#121212;margin-right:8px;animation:p 1.2s infinite}
-@keyframes p{50%{opacity:.2}}@media (prefers-color-scheme:dark){body{background:#121212;color:#eee}.dot{background:#eee}p{color:#aaa}}</style>
-<h1>The Robot Times</h1><p><span class="dot"></span><span id="s">{status}</span></p>
-<p>第一次打开要下载 Python 和依赖，大约一分钟。好了这个页面会自动变成设置引导，不用做别的。</p>
+<style>:root{--ink:#121212;--mute:#555;--paper:#fff;--soft:#f5f5f3;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{--ink:#eee;--mute:#aaa;--paper:#121212;--soft:#1d1d1d;--bad:#f2b8b5}}
+body{font-family:system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif;max-width:640px;margin:16vh auto;padding:0 20px;color:var(--ink);background:var(--paper)}
+h1{font-family:Georgia,serif;font-size:30px;margin:0 0 12px}p{color:var(--mute);line-height:1.7}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ink);margin-right:8px;animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.2}}#fail{display:none}#fail b{color:var(--bad)}
+pre{background:var(--soft);padding:10px 12px;font-size:12px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-all}
+button{font:inherit;font-size:14px;padding:7px 16px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;margin-right:8px}
+button.alt{background:none;color:var(--ink)}a{color:var(--ink)}</style>
+<h1>The Robot Times</h1>
+<div id="ok"><p><span class="dot"></span><span id="s">{status}</span></p>
+<p>第一次打开要下载 Python 和依赖，大约一分钟。好了这个页面会自动变成设置引导，不用做别的。</p></div>
+<div id="fail"><p><b id="ft"></b></p><p id="fh"></p>
+<p><button id="retry">重试</button><button class="alt" id="copy">复制日志</button>
+<a href="https://github.com/huxiaoyi-ovo/robot-times/issues/new" target="_blank" rel="noopener">报告问题</a></p>
+<p style="font-size:13px">日志（<span id="fp"></span>）：</p><pre id="log"></pre></div>
 <script>
 // 准备页面和看板用同一个端口：准备页面没有 /api/job，看板有。看板起来了就刷新；中间连不上也继续等。
-setInterval(async () => {
+const $ = (i) => document.getElementById(i);
+async function tick() {
   try {
     const r = await fetch("/api/job", {cache: "no-store"});
     if (r.ok) return location.reload();
-    const s = await fetch("/status", {cache: "no-store"});
-    if (s.ok) document.getElementById("s").textContent = await s.text();
+    const st = await (await fetch("/status", {cache: "no-store"})).json();
+    $("s").textContent = st.status;
+    $("ok").style.display = st.failed ? "none" : "";
+    $("fail").style.display = st.failed ? "block" : "none";
+    if (st.failed) { $("ft").textContent = st.status; $("fh").textContent = st.hint; $("fp").textContent = st.path; $("log").textContent = st.log; }
   } catch (e) {}
-}, 1500);
+}
+setInterval(tick, 1500); tick();
+$("retry").onclick = async () => { $("fail").style.display = "none"; $("ok").style.display = ""; $("s").textContent = "重新开始……"; await fetch("/retry", {method: "POST"}).catch(() => {}); };
+$("copy").onclick = () => navigator.clipboard.writeText($("log").textContent).then(() => { $("copy").textContent = "已复制"; });
 </script></html>"""
 
 
+def log_tail(path: Path, lines: int = 60) -> str:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "（还没有日志）"
+    text = "\n".join(text.splitlines()[-lines:])
+    return re.sub(r"(sk-[A-Za-z0-9_-]{4})[A-Za-z0-9_-]+", r"\1…", text)  # 密钥打码
+
+
+class Failed(Exception):
+    """准备或启动失败：给用户看的原因、办法，和对应的日志文件。"""
+
+    def __init__(self, message: str, hint: str, log: Path) -> None:
+        super().__init__(message)
+        self.hint, self.log = hint, log
+
+
+NET_HINT = "多半是网络问题（要能访问 GitHub 和 PyPI；用代理的话确认代理开着）。网络好了点“重试”。"
+
+
 class Preparing:
-    """看板准备好之前，先在同一个端口上显示“正在准备”。"""
+    """看板准备好之前，先在同一个端口上显示“正在准备”；失败了显示原因、日志和“重试”按钮。"""
 
     def __init__(self) -> None:
         self.status = "正在准备……"
+        self.closed = False
+        self.failed: Failed | None = None
+        self.retry = threading.Event()
         prep = self
 
         class H(BaseHTTPRequestHandler):
@@ -233,11 +289,22 @@ class Preparing:
 
             def do_GET(self):
                 if self.path.startswith("/status"):
-                    self._send(200, "text/plain", prep.status)
+                    f = prep.failed
+                    body = {"status": str(f) if f else prep.status, "failed": bool(f),
+                            "hint": f.hint if f else "", "path": str(f.log) if f else "",
+                            "log": log_tail(f.log) if f else ""}  # fmt: skip
+                    self._send(200, "application/json", json.dumps(body, ensure_ascii=False))
                 elif self.path.startswith("/api/"):
                     self._send(404, "text/plain", "preparing")
                 else:
-                    self._send(200, "text/html", PAGE.replace("{status}", prep.status))
+                    self._send(200, "text/html", PAGE.replace("{status}", html.escape(prep.status)))
+
+            def do_POST(self):
+                if self.path.startswith("/retry") and self.headers.get("Origin", "").startswith(
+                    ("http://localhost", "http://127.0.0.1")
+                ):
+                    prep.retry.set()
+                self._send(200, "text/plain", "ok")
 
             def _send(self, code: int, kind: str, text: str) -> None:
                 body = text.encode("utf-8")
@@ -254,7 +321,17 @@ class Preparing:
     def say(self, text: str) -> None:
         self.status = text
 
+    def fail(self, error: Failed) -> None:
+        self.failed = error
+        self.retry.clear()
+
+    def wait_retry(self, seconds: float) -> bool:
+        ok = self.retry.wait(seconds)
+        self.failed, self.status = None, "重新开始……"
+        return ok
+
     def close(self) -> None:
+        self.closed = True
         self.httpd.shutdown()
         self.httpd.server_close()
 
@@ -267,7 +344,11 @@ def cmd_serve() -> int:
         return 0
     register_autostart()
     if needs_prepare():
-        prepare()
+        try:
+            prepare()
+        except Failed as e:
+            print(f"{e}：{e.hint}（日志：{e.log}）")
+            return 1
     if running():  # 等的时候别的进程已经把看板启动了
         return 0
     if WIN:  # 不占着安装目录里的 uv.exe，升级安装包时才能替换
@@ -283,39 +364,54 @@ def cmd_open() -> int:
         webbrowser.open(URL)
         return 0
     register_autostart()
-    if not needs_prepare():
-        spawn(serve_cmd())  # 已经准备好了：直接启动
-        wait_running(30)
-        webbrowser.open(URL)
-        return 0
-    try:
-        prep = Preparing()
-    except OSError:
-        prep = None  # 端口被占用：不显示准备页面，准备好再打开
-    if prep:
-        webbrowser.open(URL)
-    say = prep.say if prep else print
-    try:
-        prepare(log=say)
-    except SystemExit as e:
-        say(str(e))
+    prep: Preparing | None = None
+    if needs_prepare():
+        prep = _page()
         if prep:
-            time.sleep(120)  # 让页面把原因显示一会儿
-        raise
-    if prep:
-        say("马上就好……")
-        time.sleep(2)
-        prep.close()
-    spawn(serve_cmd())
-    ok = wait_running(60)
-    if not prep and ok:
-        webbrowser.open(URL)
-    return 0 if ok else 1
+            webbrowser.open(URL)
+    while True:
+        try:
+            if needs_prepare():
+                prepare(log=prep.say if prep else print)
+            if prep:
+                prep.say("马上就好……")
+                time.sleep(1)
+                prep.close()
+            spawn(serve_cmd())
+            if not wait_running(60):
+                raise Failed(
+                    "看板没能启动",
+                    "点“重试”再试一次；还不行就把下面的日志复制给我们（报告问题）。",
+                    OUT if OUT.exists() and OUT.stat().st_size else LOG,
+                )
+            if not prep:
+                webbrowser.open(URL)
+            return 0
+        except Failed as e:
+            if prep is None or prep.closed:
+                had_tab = prep is not None  # 浏览器里已经开着准备页面，它会自己显示新的状态
+                prep = _page()
+                if prep is None:  # 端口被别的程序占着，没法显示页面
+                    print(f"{e}：{e.hint}（日志：{e.log}）")
+                    return 1
+                if not had_tab:
+                    webbrowser.open(URL)
+            prep.fail(e)
+            if not prep.wait_retry(3600):
+                prep.close()
+                return 1
+
+
+def _page() -> Preparing | None:
+    try:
+        return Preparing()
+    except OSError:
+        return None  # 端口被占用
 
 
 def register_autostart() -> None:
     """macOS 的开机启动由启动器自己登记（Linux 的安装包放在 /etc/xdg/autostart，Windows 的安装包放进“启动”文件夹）。"""
-    if sys.platform != "darwin":
+    if sys.platform != "darwin" or (HOME / "autostart-off").exists():  # 用户在设置页关掉了
         return
     launch = PAYLOAD / "launch"
     agent = Path.home() / "Library" / "LaunchAgents" / "com.therobottimes.dashboard.plist"

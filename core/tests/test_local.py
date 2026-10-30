@@ -268,8 +268,10 @@ def test_jobs_run_in_order_and_record_failures():
                 clock=lambda: at("2026-10-26 10:00"))  # fmt: skip
     st = jobs.auto()
     assert seen == [("daily", False)] and st["running"] is None
-    assert st["last"] == {"kind": "news", "ok": False, "message": "RuntimeError: 连不上 Zotero",
-                          "at": "2026-10-26T10:00:00+08:00"}  # fmt: skip
+    assert {k: st["last"][k] for k in ("kind", "ok", "message", "at")} == {
+        "kind": "news", "ok": False, "message": "RuntimeError: 连不上 Zotero",
+        "at": "2026-10-26T10:00:00+08:00"}  # fmt: skip
+    assert st["last"]["title"] == "连不上 Zotero" and "retry:news" in st["last"]["actions"]
     assert set(repo.get_json(store, "local_runs")) == {"daily", "news"}
     assert jobs.auto()["queue"] == []  # 刚试过，3 小时内不再自动重试
     jobs.start("daily")

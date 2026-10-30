@@ -141,6 +141,9 @@ PDF 和笔记写进你本机的 Zotero，不会上传到任何地方。
 
 ## 常见问题
 
+先看看板：生成失败时报头下面有原因和按钮；**设置 → 体检和排查** 能一项项检查、看日志（`~/.robot-times/serve.log`、`setup.log`）、
+复制诊断信息（不含密钥）、重启看板；开机自动运行、导出备份也在设置页里。
+
 - **连不上 Zotero**：确认 Zotero 开着，并且勾选了“允许此计算机上的其他应用程序与 Zotero 通信”。
   Zotero 装在 Windows、代码在 WSL 里跑时，WSL 默认访问不到 Windows 的 `localhost:23119`：
   直接在 Windows 上跑，或者在 `%UserProfile%\.wslconfig` 里加上 `[wsl2]` 和 `networkingMode=mirrored`。

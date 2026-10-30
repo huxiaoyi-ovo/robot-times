@@ -517,9 +517,10 @@ def local_serve(
     import webbrowser
 
     from .local.app import build
+    from .local.diagnose import log_to_file
     from .local.server import is_running, serve
 
-    _logging(log_file)
+    log_to_file(log_file)  # 日志一直写进 ~/.robot-times/serve.log，看板上能直接看
     url = f"http://localhost:{port}/"
     if is_running(port):  # 已经开着（比如开机自动启动了）：直接打开
         typer.secho(f"看板已经在运行：{url}", fg="green")
@@ -532,6 +533,11 @@ def local_serve(
     except OSError:
         _fail(f"端口 {port} 被别的程序占用了，换个端口试试：--port 8766。")
     typer.secho(f"看板：{url}（关掉这个窗口或按 Ctrl+C 停止）", fg="green")
+    from .local.update import restart_dashboard
+
+    api.restart = lambda: restart_dashboard(port)  # 看板上的“重启”和更新后的重启，都回到这个端口
+    if api.updater is not None:
+        api.updater.restart = api.restart
     if api.jobs is not None and api.ready():
         api.jobs.auto()
     if api.updater is not None:
@@ -594,7 +600,7 @@ def local_stop() -> None:
 
 
 @local.command("restart")
-def local_restart() -> None:
+def local_restart(port: int = typer.Option(8765, help="端口")) -> None:
     """重启后台的看板，比如改了 ~/.robot-times/.env 里的大模型密钥之后。"""
     import time
 
@@ -603,14 +609,15 @@ def local_restart() -> None:
     from .local.server import is_running, stop
 
     load_env()
-    if not stop():
+    if not stop(port):
         _fail("旧的看板没能停下来，可以重启电脑。")
     from .config import CONFIG_DIR
 
-    install._spawn([*install.serve_command(), "--log-file", str(CONFIG_DIR / "serve.log")])
+    install._spawn([*install.serve_command(), "--port", str(port),
+                    "--log-file", str(CONFIG_DIR / "serve.log")])  # fmt: skip
     for _ in range(40):
-        if is_running():
-            typer.secho(f"✓ 看板已重启：http://localhost:{install.PORT}/", fg="green")
+        if is_running(port):
+            typer.secho(f"✓ 看板已重启：http://localhost:{port}/", fg="green")
             return
         time.sleep(0.5)
     _fail(f"看板没起来，看看日志：{CONFIG_DIR / 'serve.log'}")

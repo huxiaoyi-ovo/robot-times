@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import worker, { autoRun, dueJobs, isoWeek, weeklyTarget } from "../src/index.js";
+import worker, { autoRun, doctor, dueJobs, isoWeek, report, weeklyTarget } from "../src/index.js";
 
 function fakeD1() {
   const db = new DatabaseSync(":memory:");
@@ -96,7 +96,8 @@ test("没配 GitHub 时不触发；看板接口返回进度", async () => {
   const job = await (await worker.fetch(new Request("https://x/api/job"), env)).json();
   assert.equal(job.running, null);
   assert.equal(job.last.ok, false);
-  assert.match(job.last.message, /Actions/);
+  assert.match(job.last.message, /没成功/);
+  assert.deepEqual(job.last.actions, ["retry:daily", "doctor"]); // 有链接时还会带上 GitHub 上的记录
   const started = await (await worker.fetch(new Request("https://x/api/run/news", { method: "POST" }), env)).json();
   assert.equal(started.running, "news");
   assert.deepEqual(gh.dispatched, [["news", { ref: "main" }]]);
@@ -123,4 +124,17 @@ test("云端版的新版本提示：12 小时查一次，提示去 GitHub 同步
   assert.equal(calls, 1);
   await cloudUpdate(env, now + 13 * 3600e3);
   assert.equal(calls, 2);
+});
+
+test("体检：列出没配好的地方，最近失败的任务带 GitHub 链接", async () => {
+  const DB = fakeD1();
+  fakeGitHub([run("daily", "completed", { conclusion: "failure", html_url: "https://github.com/me/robot-times/actions/runs/1" })]);
+  const d = await doctor({ DB, GITHUB_TOKEN: "T", GITHUB_REPO: "me/robot-times" }, { email: "a@b.c" });
+  const by = Object.fromEntries(d.checks.map((c) => [c.id, c]));
+  assert.equal(by.zotero.ok, false);
+  assert.equal(by.llm.ok, null); // 可选项没配不算错
+  assert.equal(by.jobs.ok, false);
+  assert.deepEqual(by.jobs.actions, ["url:https://github.com/me/robot-times/actions/runs/1"]);
+  assert.equal(d.ok, false);
+  assert.match(report(d), /✗ Zotero 写入/);
 });

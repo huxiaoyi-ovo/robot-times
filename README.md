@@ -68,7 +68,8 @@
 > 默认用 [DeepSeek](https://platform.deepseek.com)，每天几毛钱；也可以换成其他 OpenAI 兼容的接口，包括本地的 Ollama。
 > 密钥只存在你电脑上的 `~/.robot-times/.env` 里。
 
-遇到问题，看[本地版安装说明](docs/dev/local-setup.md)里的常见问题。
+遇到问题：生成失败时报头下面会说清原因，旁边有“重试”“去设置”“看日志”按钮；
+也可以在 **设置 → 体检和排查** 里点“开始体检”，一项项检查哪里不对。还不行就点“复制诊断信息”，贴到 [GitHub 问题](https://github.com/huxiaoyi-ovo/robot-times/issues/new) 里。
 
 ## 其他安装方式
 

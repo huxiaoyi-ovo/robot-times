@@ -62,3 +62,30 @@ def test_apply_starts_only_when_not_running_and_remove_cleans_up(tmp_path):
     assert install.installed("linux", home, {}) == written
     gone = install.remove(plan, run=lambda cmd: None)
     assert gone == written and not any(p.exists() for p in written)
+
+
+def test_packaged_autostart_toggle_each_platform(tmp_path):
+    from robot_times.local.install import autostart_on, set_autostart
+
+    env = {"ROBOT_TIMES_PACKAGED": "1", "ROBOT_TIMES_LAUNCHER": "/opt/robot-times/launch",
+           "ROBOT_TIMES_HOME": str(tmp_path / ".robot-times"), "APPDATA": str(tmp_path / "AppData")}  # fmt: skip
+    for platform in ("linux", "darwin", "win32"):
+        home = tmp_path / platform
+        home.mkdir()
+        if platform == "win32":  # 安装程序放的快捷方式
+            env["APPDATA"] = str(home / "AppData")
+            startup = home / "AppData/Microsoft/Windows/Start Menu/Programs/Startup"
+            startup.mkdir(parents=True)
+            (startup / "The Robot Times.lnk").write_bytes(b"lnk")
+        env["ROBOT_TIMES_HOME"] = str(home / ".robot-times")
+        assert autostart_on(platform, home, env), platform
+        set_autostart(False, platform, home, env, tmp_path)
+        assert not autostart_on(platform, home, env), platform
+        set_autostart(True, platform, home, env, tmp_path)
+        assert autostart_on(platform, home, env), platform
+    linux = tmp_path / "linux" / ".config/autostart/the-robot-times.desktop"
+    assert not linux.exists()  # 打开时删掉覆盖文件，用回系统的那个
+    assert (
+        "/opt/robot-times/launch"
+        in (tmp_path / "darwin/Library/LaunchAgents/com.therobottimes.dashboard.plist").read_text()
+    )

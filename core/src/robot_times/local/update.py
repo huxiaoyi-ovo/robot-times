@@ -265,11 +265,13 @@ def find_uv() -> str | None:
     return None
 
 
-def restart_dashboard() -> None:
+def restart_dashboard(port: int = 8765) -> None:
     """另起一个进程执行 robot-times local restart：它会让现在这个看板退出，再启动新版本。"""
     from . import install
 
-    install._spawn([sys.executable, "-m", "robot_times.cli", "local", "restart"])
+    install._spawn(
+        [sys.executable, "-m", "robot_times.cli", "local", "restart", "--port", str(port)]
+    )
 
 
 def _run(cmd: list[str], cwd: Path) -> None:

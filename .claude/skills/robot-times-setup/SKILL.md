@@ -163,6 +163,17 @@ cd web/app && npx wrangler d1 execute DB --remote --file ../../robot-times.sql
 
 ## 7. 排错
 
+先问看板自己（和设置页“体检和排查”是同一套接口）：
+
+```bash
+curl http://localhost:8765/api/doctor                 # 一项项检查：ok 为 false 的就是问题，hint 是办法
+curl "http://localhost:8765/api/logs?name=serve&lines=200"   # 看板日志；name=setup 是第一次安装依赖的日志
+curl http://localhost:8765/api/job                    # last 里有上次生成的结果；失败时 title、hint 说明原因
+curl -X POST -H "Content-Type: application/json" http://localhost:8765/api/restart   # 重启看板
+```
+
+用户可以在 **设置 → 体检和排查** 里自己点；需要人帮忙时，让用户点“复制诊断信息”发给你（不含密钥）。
+
 | 现象 | 原因和办法 |
 | --- | --- |
 | 第一次打开一直“正在准备” | 看 `~/.robot-times/setup.log`；多半是网络下载 Python / 依赖失败，网络好了重新打开应用 |

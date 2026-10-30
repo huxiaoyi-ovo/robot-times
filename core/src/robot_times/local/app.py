@@ -149,4 +149,7 @@ def build(store: SqliteStore | None = None, *, background: bool = True) -> Local
 
     zurl = os.environ.get("ROBOT_TIMES_ZOTERO_URL", ZOTERO_URL).rstrip("/").removesuffix("/api")
     api.setup = Setup(store, api, base=zurl, key_file=KEY_FILE, env_file=ENV_FILE)
+    from .update import restart_dashboard
+
+    api.restart = restart_dashboard
     return api

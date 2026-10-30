@@ -97,8 +97,18 @@ class Jobs:
                 "label": LABELS.get(self._current or "", ""),
                 "startedAt": self._started,
                 "queue": [k for k, _ in self._queue],
-                "last": self._last,
+                "last": self._last or self._remembered(),
             }
+
+    def _remembered(self) -> dict[str, Any] | None:
+        """看板重启过：用记下来的上一次结果（失败了重启也还能看到原因）。"""
+        try:
+            from .diagnose import history
+
+            h = history(self.store)
+        except Exception:
+            return None
+        return h[0] if h else None
 
     def auto(self) -> dict[str, Any]:
         """打开看板时调用：今天该有的还没有，就排进队列。"""
@@ -152,6 +162,16 @@ class Jobs:
                 tried[kind] = self.clock().isoformat(timespec="seconds")
                 repo.set_json(self.store, "local_runs", tried)
             result["at"] = self.clock().isoformat(timespec="seconds")
+            if not result["ok"]:  # 看板上显示原因和办法
+                from .diagnose import explain
+
+                result.update(explain(result["message"], kind))
+            try:
+                from .diagnose import record
+
+                record(self.store, result)
+            except Exception:
+                log.exception("记录任务结果失败")
             with self._lock:
                 self._last = result
             log.info("完成：%s %s", LABELS[kind], result["message"])

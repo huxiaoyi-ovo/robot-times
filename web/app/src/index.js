@@ -38,9 +38,10 @@ export default {
       const who = await authorize(request, env);
       return await route(request, env, url, who);
     } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message }, e.status);
+      // 报错带上办法（hint、actions），页面上显示成按钮；和本地版 core/src/robot_times/local/diagnose.py 一样的字段
+      if (e instanceof HttpError) return json({ error: e.message, hint: "", actions: ["doctor"] }, e.status);
       console.error(e);
-      return json({ error: "服务器出错了，稍后再试。" }, 500);
+      return json({ error: `出错了：${String(e?.message || e).slice(0, 200)}`, hint: "先点“体检”看看哪里没配好；还不行就复制诊断信息去报告问题。", actions: ["doctor"] }, 500);
     }
   },
   // 定时任务（每 30 分钟）：每 3 小时代抓一次拒绝 GitHub 服务器的订阅（如 *.substack.com），存进 D1 给业界简报用；
@@ -187,6 +188,10 @@ async function route(request, env, url, who) {
   if (m === "POST" && p === "/api/ask") return ask(env, await body(request));
   if (m === "POST" && (g = p.match(/^\/api\/run\/(daily|weekly|news)$/))) return json(await runJob(env, g[1]));
   if (m === "GET" && p === "/api/job") return json(await jobStatus(env));
+  if (m === "GET" && p === "/api/doctor") return json(await doctor(env, who));
+  if (m === "GET" && p === "/api/report") return json({ text: report(await doctor(env, who)), issues: ISSUES });
+  if (m === "GET" && p === "/api/export") throw new HttpError(404, "云端版的数据在 Cloudflare D1 里：在 Cloudflare 后台的 D1 页面可以导出。");
+  if (m === "GET" && p === "/api/logs") throw new HttpError(404, "云端版的日志在 GitHub 仓库的 Actions 页面：点开对应的任务就能看到每一步的输出。");
   throw new HttpError(404, "没有这个接口。");
 }
 
@@ -289,6 +294,7 @@ async function bootstrap(env, who) {
     mode: "cloud",
     job,
     update: await cloudUpdate(env).catch(() => null),
+    autostart: null, // 本地版才有“开机自动启动”开关
     features: {
       zotero: Boolean(env.ZOTERO_USER_ID && env.ZOTERO_API_KEY),
       ask: Boolean(env.DEEPSEEK_API_KEY),
@@ -947,7 +953,9 @@ function statusOf(runs, dispatched = []) {
       ? {
           kind: kindOf(done),
           ok: done.conclusion === "success",
-          message: done.conclusion === "success" ? "" : `GitHub 上的任务没成功（${done.conclusion}），可以去仓库的 Actions 页面看原因。`,
+          message: done.conclusion === "success" ? "" : `GitHub 上的任务没成功（${done.conclusion}）`,
+          hint: done.conclusion === "success" ? "" : "点“看 GitHub 上的记录”能看到是哪一步出错；常见原因是密钥没填或过期。",
+          actions: done.conclusion === "success" ? [] : [`retry:${kindOf(done)}`, ...(done.html_url ? [`url:${done.html_url}`] : []), "doctor"],
           at: done.updated_at,
         }
       : null,
@@ -1004,4 +1012,48 @@ async function runJob(env, job) {
   const busy = runs.some((x) => ACTIVE.has(x.status) && kindOf(x) === job);
   if (!busy) await dispatch(env, job, null);
   return statusOf(runs, busy ? [] : [job]);
+}
+
+// ---------------- 体检（设置页“体检和排查”） ----------------
+
+const ISSUES = "https://github.com/huxiaoyi-ovo/robot-times/issues/new";
+const check = (id, label, ok, detail = "", hint = "", actions = []) => ({ id, label, ok, detail, hint, actions });
+
+export async function doctor(env, who = {}) {
+  const out = [check("login", "已登录", true, who.email || "")];
+  const days = await env.DB.prepare("select count(*) as n from days").first().catch(() => null);
+  out.push(check("db", "数据库", Boolean(days), days ? `${days.n} 天的推荐` : "读不到", days ? "" : "检查 wrangler.jsonc 里的 D1 数据库 ID。"));
+  const z = Boolean(env.ZOTERO_USER_ID && env.ZOTERO_API_KEY);
+  out.push(check("zotero", "Zotero 写入", z, "", z ? "" : "在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY（见 cloud-setup.md）。"));
+  out.push(check("llm", "问 AI", env.DEEPSEEK_API_KEY ? true : null, env.DEEPSEEK_API_KEY ? "已配置" : "没配（可选）", env.DEEPSEEK_API_KEY ? "" : "在 Cloudflare 给看板加上 DEEPSEEK_API_KEY。"));
+  const gh = Boolean(ghRepo(env));
+  out.push(check("github", "按时自动生成", gh ? true : null, gh ? "已配置" : "没配（可选）", gh ? "" : "给看板加上 GITHUB_TOKEN 和 GITHUB_REPO，就能准时生成、在看板上点“现在生成”。"));
+  let history = [];
+  if (gh) {
+    try {
+      const runs = (await ghRuns(env)).filter((x) => x.status === "completed").slice(0, 10);
+      history = runs.map((x) => ({ kind: kindOf(x), ok: x.conclusion === "success", message: x.conclusion === "success" ? "" : `GitHub 上的任务没成功（${x.conclusion}）`, at: x.updated_at, url: x.html_url }));
+      if (history[0]) {
+        out.push(check("jobs", "最近一次生成", history[0].ok, history[0].ok ? "成功" : history[0].message, history[0].ok ? "" : "点开 GitHub 上的记录看是哪一步出错。", history[0].ok ? [] : [`url:${history[0].url}`]));
+      }
+    } catch (e) {
+      out.push(check("jobs", "读 GitHub 上的任务", false, e.message || "", "检查 GITHUB_TOKEN 是否过期、有没有 Actions 读写权限。"));
+    }
+  }
+  const u = await cloudUpdate(env).catch(() => null);
+  if (u) out.push(check("version", "版本", !u.available, `v${u.current}${u.available ? `，可以更新到 v${u.latest.version}` : ""}`, u.available ? "到你 fork 的仓库页面点 Sync fork。" : "", u.available && u.syncUrl ? [`url:${u.syncUrl}`] : []));
+  return { checks: out, ok: out.every((c) => c.ok !== false), history };
+}
+
+export function report(d) {
+  const mark = (c) => (c.ok ? "✓" : c.ok === null ? "·" : "✗");
+  return [
+    `The Robot Times v${VERSION}（云端版）`,
+    "",
+    "体检：",
+    ...d.checks.map((c) => `  ${mark(c)} ${c.label} ${c.detail}`),
+    "",
+    "最近的任务：",
+    ...d.history.slice(0, 8).map((h) => `  ${h.at} ${h.kind} ${h.ok ? "成功" : "失败"} ${h.message}`),
+  ].join("\n").replace(/sk-[A-Za-z0-9_-]+/g, "sk-…");
 }

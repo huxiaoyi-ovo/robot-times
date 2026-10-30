@@ -187,6 +187,7 @@ class LocalApi:
         self.jobs = jobs
         self.updater = updater
         self.setup = setup
+        self.restart: Callable[[], None] | None = None  # 重启看板（看板上的“重启”按钮）
         self.pdf = pdf
         self.http = http or httpx.Client(timeout=60.0, follow_redirects=True)
 
@@ -196,16 +197,17 @@ class LocalApi:
         try:
             return self._route(method, path.rstrip("/"), query, body)
         except ApiError as e:
-            return Reply(e.status, {"error": str(e)})
+            return _error(e.status, str(e))
         except repo.SettingsError as e:
-            return Reply(400, {"error": str(e)})
+            return _error(400, str(e))
         except ZoteroError as e:
-            return Reply(502, {"error": str(e)})
+            log.warning("Zotero：%s %s：%s", method, path, e)
+            return _error(502, str(e))
         except httpx.ConnectError:
-            return Reply(502, {"error": "连不上 Zotero：请确认 Zotero 已经打开。"})
-        except Exception:
+            return _error(502, "连不上 Zotero：请确认 Zotero 已经打开。")
+        except Exception as e:
             log.exception("接口出错：%s %s", method, path)
-            return Reply(500, {"error": "服务器出错了，稍后再试。"})
+            return _error(500, f"出错了：{type(e).__name__}: {str(e)[:200]}")
 
     def _route(self, m: str, p: str, q: dict[str, str], raw: bytes) -> Reply:
         def body() -> dict[str, Any]:
@@ -262,6 +264,27 @@ class LocalApi:
                 return Reply(body=self.updater.status())
             except UpdateError as e:
                 raise ApiError(400, str(e)) from None
+        if p == "/api/autostart" and m in ("GET", "PUT"):
+            import os
+            import sys
+            from pathlib import Path
+
+            from . import install
+
+            env = dict(os.environ)
+            if m == "PUT":
+                install.set_autostart(
+                    bool(body().get("on")), sys.platform, Path.home(), env, Path.cwd()
+                )
+            return Reply(body={"on": install.autostart_on(sys.platform, Path.home(), env)})
+        if m == "GET" and p == "/api/export":  # 设置页“导出备份”：也能导进云端版
+            from .export import export_sql
+
+            return Reply(
+                body={"filename": f"robot-times-{_now()[:10]}.sql", "sql": export_sql(self.store)}
+            )
+        if p in ("/api/doctor", "/api/logs", "/api/report", "/api/restart"):
+            return self._diagnose_route(m, p, q)
         if m == "GET" and p == "/api/job":
             return Reply(body=self.jobs.status() if self.jobs else None)
         raise ApiError(404, "没有这个接口。")
@@ -319,6 +342,7 @@ class LocalApi:
             "site": site_info(settings),
             "job": self.jobs.status() if self.jobs else None,
             "update": self._update_status(),
+            "autostart": self._autostart(),
             "setup": {"done": self.ready()} if self.setup is not None else None,
             "features": {
                 "zotero": self.zotero is not None and bool(self.zotero.api_key),
@@ -326,6 +350,19 @@ class LocalApi:
                 "run": self.jobs is not None,
             },
         }
+
+    def _autostart(self) -> bool | None:
+        """开机自动启动开着没有（设置页里的开关）；判断不了就不显示开关。"""
+        import os
+        import sys
+        from pathlib import Path
+
+        from . import install
+
+        try:
+            return install.autostart_on(sys.platform, Path.home(), dict(os.environ))
+        except OSError:
+            return None
 
     def ready(self) -> bool:
         """设置引导做完了没有（没做完之前不自动生成，Zotero 和研究兴趣都还没有）。"""
@@ -370,6 +407,27 @@ class LocalApi:
             return Reply(body=fn())
         except SetupError as e:
             raise ApiError(400, str(e)) from None
+
+    def _diagnose_route(self, m: str, p: str, q: dict[str, str]) -> Reply:
+        from . import diagnose
+
+        if m == "GET" and p == "/api/doctor":
+            return Reply(body=diagnose.Doctor(self).run())
+        if m == "GET" and p == "/api/report":
+            return Reply(body={"text": diagnose.Doctor(self).report(), "issues": diagnose.ISSUES})
+        if m == "GET" and p == "/api/logs":
+            name = q.get("name") or "serve"
+            if name not in diagnose.LOGS:
+                raise ApiError(400, "没有这个日志。")
+            return Reply(body=diagnose.tail(name, _int(q.get("lines"), 300)))
+        if m == "POST" and p == "/api/restart":
+            if self.jobs is not None and self.jobs.status()["running"]:
+                raise ApiError(400, "正在生成推荐，等生成完再重启。")
+            if self.restart is None:
+                raise ApiError(400, "这里不能重启。")
+            threading.Timer(0.5, self.restart).start()  # 先把回复发出去
+            return Reply(body={"ok": True})
+        raise ApiError(404, "没有这个接口。")
 
     def _update_status(self) -> dict[str, Any] | None:
         """打开看板时顺便在后台查一下新版本（12 小时最多一次），不让页面等。"""
@@ -610,6 +668,14 @@ class LocalApi:
             {"role": "user", "content": prompt},
         ]
         return Reply(stream=self.llm_stream(messages))
+
+
+def _error(status: int, message: str) -> Reply:
+    """报错带上原因和办法（hint、actions），页面上显示成可以点的按钮。"""
+    from .diagnose import explain
+
+    info = explain(message)
+    return Reply(status, {"error": message, "hint": info["hint"], "actions": info["actions"]})
 
 
 def stream_chat(llm_base: str, api_key: str, model: str, http: httpx.Client | None = None):

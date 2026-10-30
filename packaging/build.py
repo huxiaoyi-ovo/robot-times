@@ -51,7 +51,9 @@ def version() -> str:
 
 
 def tracked() -> list[str]:
-    out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True)
+    # 已提交的和还没提交的新文件都算（.gitignore 里的不算），本地打包时不会漏掉刚加的文件
+    out = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                         cwd=ROOT, capture_output=True, check=True)  # fmt: skip
     files = [f for f in out.stdout.decode().split("\0") if f]
     keep = []
     for f in files:

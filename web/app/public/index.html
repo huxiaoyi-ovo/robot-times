@@ -21,7 +21,7 @@
    参照严肃出版物的版面：报头 + 双线、头条通栏、主稿与简讯分栏、细线分隔、一种强调色（深红）。
    层级靠字号、字重和版面位置区分，不靠彩色卡片。 */
 :root{
-  --paper:#FFFFFF; --paper-2:#F7F7F5; --ink:#121212; --text:#2B2B2B; --mute:#5A5A5A; --faint:#8B8B8B;
+  --bad:#B3261E; --paper:#FFFFFF; --paper-2:#F7F7F5; --ink:#121212; --text:#2B2B2B; --mute:#5A5A5A; --faint:#8B8B8B;
   --masthead:"UnifrakturMaguntia","Old English Text MT",serif;
   --rule:#E2E2E2; --rule-strong:#121212; --accent:#121212; --accent-soft:#F3F3F3; --on-accent:#FFFFFF;
   --zh-display:"Noto Serif SC","Songti SC","STSong",serif;
@@ -31,10 +31,10 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --paper:#121212; --paper-2:#1B1B1B; --ink:#F4F4F4; --text:#DCDCDC; --mute:#A2A2A2; --faint:#767676;
+  --bad:#F2B8B5; --paper:#121212; --paper-2:#1B1B1B; --ink:#F4F4F4; --text:#DCDCDC; --mute:#A2A2A2; --faint:#767676;
   --rule:#323232; --rule-strong:#EDEDED; --accent:#EDEDED; --accent-soft:#242424; --on-accent:#121212; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --paper:#121212; --paper-2:#1B1B1B; --ink:#F4F4F4; --text:#DCDCDC; --mute:#A2A2A2; --faint:#767676;
+  --bad:#F2B8B5; --paper:#121212; --paper-2:#1B1B1B; --ink:#F4F4F4; --text:#DCDCDC; --mute:#A2A2A2; --faint:#767676;
   --rule:#323232; --rule-strong:#EDEDED; --accent:#EDEDED; --accent-soft:#242424; --on-accent:#121212; color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -499,6 +499,19 @@ details[open] summary{margin-bottom:10px}
 .jobbar .dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:jobpulse 1.2s ease-in-out infinite}
 @keyframes jobpulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.jobbar .dot{animation:none}}
+.toast.rich{display:grid;gap:6px;text-align:left;width:min(520px,calc(100% - 32px));padding:12px 16px;line-height:1.55}
+.toast .hint{opacity:.85;font-size:13px}.toast .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.toast .btn{border-color:var(--paper);color:var(--paper);padding:3px 10px;font-size:13px}.toast .btn:hover{background:var(--paper);color:var(--ink)}
+.toast .btn.link{border-color:transparent;opacity:.8}
+.failbar{border-color:var(--bad)}.failbar b{color:var(--bad)}.failbar code{display:block;white-space:pre-wrap;word-break:break-all;margin-top:4px;color:var(--mute)}
+.status-list li.bad::before{background:var(--bad)}.status-list li .acts{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+.status-list li .sub{font-size:13px;color:var(--mute);margin:2px 0 0 18px}.status-list li .acts{margin-left:14px}
+.hist{font-size:13px;color:var(--mute);margin:8px 0 0;padding-left:18px}.hist li{margin:3px 0}
+dialog.logdlg{width:min(980px,calc(100% - 24px));max-height:86vh;border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);padding:16px 18px;display:none}
+dialog.logdlg[open]{display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px}
+dialog.logdlg::backdrop{background:rgba(0,0,0,.35)}
+dialog.logdlg pre{margin:0;overflow:auto;background:var(--paper-2);padding:10px 12px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;min-height:200px;max-height:62vh}
+dialog.logdlg .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);background:var(--ink);color:var(--paper);padding:10px 18px;font-size:13.5px;z-index:40;max-width:calc(100% - 32px)}
 
 /* ===================== 大报版式 =====================
@@ -863,6 +876,8 @@ table.plan{font-family:var(--franklin)}
 
 <div id="reader-root"></div>
 <div class="toast" id="toast" role="status" hidden></div>
+<dialog class="logdlg" id="logdlg" aria-label="日志"><div class="row"><b style="flex:1">日志</b><button class="btn" data-log="serve">看板</button><button class="btn" data-log="setup">安装和依赖</button></div>
+<pre id="logtext">载入中…</pre><div class="row"><span class="small faint" id="logpath" style="flex:1"></span><button class="btn" data-act="logs-refresh">刷新</button><button class="btn" data-act="logs-copy">复制</button><button class="btn pri" data-act="logs-close">关掉</button></div></dialog>
 
 <script>
 (() => {
@@ -892,17 +907,46 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const fmtDate = d => { if(!d) return ""; const [, m, dd] = d.slice(0,10).split("-"); return `${+m}月${+dd}日`; };
 const longDate = d => { const x=new Date(d.slice(0,10)+"T00:00:00"); return `${x.getFullYear()}年${x.getMonth()+1}月${x.getDate()}日　${WEEKDAY[x.getDay()]}`; };
 const venueText = v => String(v||"").replace(/\s*·\s*/g," ");
-function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,3200); }
+/* 提示：普通消息一行；报错带原因和可以点的办法（后端给的 hint、actions），停留久一点 */
+function toast(x){
+  const t=$("#toast"); clearTimeout(toast._t);
+  const info = x instanceof Error ? x.info : null;
+  if(info && (info.hint || (info.actions||[]).length)){
+    t.className="toast rich";
+    t.innerHTML=`<b>${esc(x.message)}</b>${info.hint?`<span class="hint">${esc(info.hint)}</span>`:""}<span class="acts">${actBtns(info.actions)}<button class="btn link" data-act="toast-close">关掉</button></span>`;
+    t.hidden=false; toast._t=setTimeout(()=>t.hidden=true,15000); return;
+  }
+  t.className="toast"; t.textContent = x instanceof Error ? x.message : x;
+  t.hidden=false; toast._t=setTimeout(()=>t.hidden=true, x instanceof Error ? 6000 : 3200);
+}
+/* 按钮：后端用标识告诉页面能怎么修，见 core/src/robot_times/local/diagnose.py */
+const ISSUES="https://github.com/huxiaoyi-ovo/robot-times/issues/new";
+function actLabel(a){
+  if(a.startsWith("retry:")) return "重试";
+  if(a.startsWith("url:")) return /deepseek/.test(a)?"去充值":/zotero\.org/.test(a)?"下载 Zotero":/github\.com.*actions/.test(a)?"看 GitHub 上的记录":"打开网页";
+  return {setup:"去设置", logs:"看日志", doctor:"体检", restart:"重启看板", update:"更新"}[a]||a;
+}
+function actOk(a){
+  if(["setup","logs","restart"].includes(a)) return isLocal();
+  if(a==="update") return !!S.update?.available && S.update?.method!=="fork";
+  if(a.startsWith("retry:")) return isLocal() || !!S.features?.run;
+  return true;
+}
+const actBtns = (acts, cls="btn") => (acts||[]).filter(actOk).map(a=>`<button class="${cls}" data-act="${esc(a)}">${esc(actLabel(a))}</button>`).join("");
 
 async function api(path, opts={}){
   let resp;
   try{ resp = await fetch(path, {...opts, headers:{"content-type":"application/json", ...(opts.headers||{})}, credentials:"same-origin"}); }
-  catch(e){ throw new Error("连不上服务器，或者登录过期了，请刷新页面。"); }
+  catch(e){
+    const err=new Error(isLocal()?"连不上看板：它可能停了。":"连不上服务器，或者登录过期了，请刷新页面。");
+    if(isLocal()) err.info={hint:"重新打开 The Robot Times 应用（或者重启电脑），再刷新这个页面。", actions:[]};
+    throw err;
+  }
   if(resp.status===401 || (resp.redirected && !resp.url.includes("/api/"))) throw new Error("登录已过期，请刷新页面。");
   const ct = resp.headers.get("content-type")||"";
   if(!ct.includes("application/json")){ if(!resp.ok) throw new Error(`请求失败：HTTP ${resp.status}`); return resp; }
   const data = await resp.json();
-  if(!resp.ok) throw new Error(data.error || `请求失败：HTTP ${resp.status}`);
+  if(!resp.ok){ const err=new Error(data.error || `请求失败：HTTP ${resp.status}`); err.info={hint:data.hint||"", actions:data.actions||[]}; throw err; }
   return data;
 }
 
@@ -1161,7 +1205,7 @@ function viewNews(){
   if(!S.newsDates.length) return emptyBox("还没有业界简报",(isLocal()?"打开看板时自动生成：":"每天早上 8:20 左右（北京时间）自动生成：")+"从和你方向有关的行业媒体、公司博客、AIHOT、Hacker News，以及 Substack 等深度文章里挑出今天值得看的，配中文标题和摘要。"+(isLocal()?"":"第一次可以去 GitHub 仓库的 Actions → news → Run workflow 手动生成。"));
   const date=S.newsDates[Math.min(S.newsIdx,S.newsDates.length-1)];
   const n=S.newsCache[date];
-  if(!n){ loadNews(date).then(()=>{ if(S.tab==="news") render(); }).catch(e=>toast(e.message)); return `<p class="mute">载入中…</p>`; }
+  if(!n){ loadNews(date).then(()=>{ if(S.tab==="news") render(); }).catch(e=>toast(e)); return `<p class="mute">载入中…</p>`; }
   const older=S.newsIdx<S.newsDates.length-1, newer=S.newsIdx>0;
   const cats=[...new Set([...NEWS_CATS,...(n.news||[]).map(it=>it.category)])];
   const groups=cats.map(c=>[c,(n.news||[]).filter(it=>it.category===c)]).filter(([,xs])=>xs.length);
@@ -1269,7 +1313,7 @@ async function loadLib(append){
     if(seq!==libSeq) return;
     r.papers.forEach(p=>S.papers[p.id]=p);
     L.list=(append?L.list:[]).concat(r.papers.map(p=>p.id)); L.total=r.total;
-  }catch(e){ if(seq===libSeq){ L.list=L.list||[]; toast(e.message); } }
+  }catch(e){ if(seq===libSeq){ L.list=L.list||[]; toast(e); } }
   finally{ if(seq===libSeq){ L.loading=false; if(S.tab==="lib") render(); } }
 }
 
@@ -1324,12 +1368,14 @@ function viewCfg(){
         ${ck(f.zotero,"可以写入 Zotero（本机）","还不能写入 Zotero：点下面的按钮重新连接，在 Zotero 弹窗里点 Always Allow")}
         ${ck(f.ask,"可以问 AI、写中文解读","还没配大模型（可选）：点下面的按钮填密钥")}
         ${ck(true,"数据存在这台电脑上（~/.robot-times/robot-times.db）","")}
+        <li style="list-style:none"><div class="actions"><button class="btn link" data-act="export">导出备份（.sql，也能导进云端版）</button></div></li>
         <li style="list-style:none"><div class="actions"><button class="btn" data-su="reopen">${f.zotero&&f.ask?"重新连接 Zotero、换大模型":"连接 Zotero、配大模型"}</button></div></li>` : `
         ${ck(f.zotero,"可以写入 Zotero","还不能写入 Zotero：在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY")}
         ${ck(f.ask,"可以问 AI","还不能问 AI：在 Cloudflare 给看板加上 DEEPSEEK_API_KEY")}
         ${ck(f.run,"可以在这里手动生成推荐","“立即生成”没开（可选）：在 Cloudflare 给看板加上 GITHUB_TOKEN")}`}
       </ul></section>
     ${versionSection()}
+    ${doctorSection()}
   </div>`;
 }
 /* ---------- 第一次打开：设置引导（本地版） ---------- */
@@ -1436,6 +1482,89 @@ async function suAction(what){
   });
 }
 
+/* ---------- 体检、日志、重启：出了问题在页面上就能查、能修 ---------- */
+const fmtTime = iso => { if(!iso) return ""; const d=new Date(iso); return isNaN(d)?String(iso):`${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+const DOC = {busy:false, res:null, err:""};
+function doctorSection(){
+  const r=DOC.res, LB={daily:"推荐", news:"业界简报", weekly:"周报"};
+  const list = r ? `<ul class="status-list" style="margin-top:14px">${r.checks.map(c=>`<li class="${c.ok?"ok":c.ok===false?"bad":""}"><b>${esc(c.label)}</b>${c.detail?`　<span class="faint">${esc(c.detail)}</span>`:""}
+      ${c.hint?`<div class="sub">${esc(c.hint)}</div>`:""}${(c.actions||[]).filter(actOk).length?`<div class="acts">${actBtns(c.actions,"btn link")}</div>`:""}</li>`).join("")}</ul>
+    <p class="small ${r.ok?"":"err"}" style="margin-top:10px">${r.ok?"都正常。":"标红的是有问题的地方，按旁边的说明处理；处理不了就复制诊断信息去报告问题。"}</p>
+    ${(r.history||[]).length?`<details><summary class="small">最近 ${r.history.length} 次生成</summary><ul class="hist">${r.history.map(h=>`<li>${esc(fmtTime(h.at))}　${esc(LB[h.kind]||h.kind||"")}　${h.ok?"成功":"<b>失败</b>"}　${esc(h.message||"")}</li>`).join("")}</ul></details>`:""}` : "";
+  return `<section class="section" id="doctor"><h2>体检和排查</h2>
+    <p class="mute">哪里不对劲，先点“开始体检”：一项项检查，有问题的地方会告诉你怎么办。</p>
+    <div class="actions"><button class="btn pri" data-act="doctor-run" ${DOC.busy?"disabled":""}>${DOC.busy?"正在检查…":r?"再检查一次":"开始体检"}</button>
+      ${isLocal()?`<button class="btn" data-act="logs">查看日志</button>`:""}<button class="btn" data-act="report-copy">复制诊断信息</button>
+      <a class="btn link" href="${ISSUES}" target="_blank" rel="noopener">报告问题</a>${isLocal()?`<button class="btn link" data-act="restart">重启看板</button>`:""}</div>
+    ${DOC.err?`<p class="err">${esc(DOC.err)}</p>`:""}${list}</section>`;
+}
+async function runDoctor(){
+  DOC.busy=true; DOC.err=""; if(S.tab==="cfg") render();
+  try{ DOC.res=await api("/api/doctor"); }catch(e){ DOC.err=e.message; }
+  DOC.busy=false; if(S.tab==="cfg") render();
+}
+async function copyText(text, ok){
+  try{ await navigator.clipboard.writeText(text); toast(ok); return true; }catch{ return false; }
+}
+async function copyReport(){
+  try{
+    const r=await api("/api/report");
+    if(!await copyText(r.text, "诊断信息已复制，可以贴到 GitHub 上的问题里（不含密钥）")) showLogText("诊断信息（复制下面的内容）", r.text, "");
+  }catch(e){ toast(e); }
+}
+let logName="serve";
+function showLogText(title, text, path){
+  const dlg=$("#logdlg"); $("#logtext").textContent=text||"（还没有内容）"; $("#logpath").textContent=path||title||"";
+  for(const b of dlg.querySelectorAll("[data-log]")) b.setAttribute("aria-pressed", b.dataset.log===logName && !title ? "true":"false");
+  if(!dlg.open) dlg.showModal();
+}
+async function openLogs(name){
+  logName=name||logName;
+  try{ const r=await api(`/api/logs?name=${logName}&lines=400`); showLogText("", r.exists?r.text:"这个日志还没有内容。", r.path); const pre=$("#logtext"); pre.scrollTop=pre.scrollHeight; }
+  catch(e){ toast(e); }
+}
+async function restartDash(){
+  try{ await api("/api/restart",{method:"POST"}); }catch(e){ toast(e); return; }
+  toast("正在重启看板，好了会自动刷新");
+  let down=false;
+  const t=setInterval(async()=>{
+    try{ await fetch("/api/job",{cache:"no-store"}); if(down){ clearInterval(t); location.reload(); } }
+    catch{ down=true; }
+  }, 1000);
+  setTimeout(()=>{ clearInterval(t); location.reload(); }, 40000);
+}
+async function doAct(a){
+  if(a==="toast-close"){ $("#toast").hidden=true; return; }
+  if(a==="logs-close"){ $("#logdlg").close(); return; }
+  if(a==="logs-refresh") return openLogs();
+  if(a==="logs-copy") return copyText($("#logtext").textContent, "已复制");
+  if(a==="fail-dismiss"){ try{ localStorage.setItem("fail-dismiss", S.job?.last?.at||""); }catch{} $("#jobbar").hidden=true; return; }
+  $("#toast").hidden=true;
+  if(a.startsWith("retry:")){
+    try{ S.job=await api(`/api/run/${a.slice(6)}`,{method:"POST"}); showJob(); watchJob(); toast("重新开始生成了，好了会自动显示"); }catch(e){ toast(e); }
+    return;
+  }
+  if(a.startsWith("url:")){ window.open(a.slice(4),"_blank","noopener"); return; }
+  if(a==="setup"){ if(S.open) closeReader(); S.tab="cfg"; history.replaceState(null,"","#cfg"); return suAction("reopen"); }
+  if(a==="logs") return openLogs();
+  if(a==="doctor" || a==="doctor-run"){
+    if(S.tab!=="cfg"){ if(S.open) closeReader(); S.tab="cfg"; history.replaceState(null,"","#cfg"); render(); }
+    setTimeout(()=>document.getElementById("doctor")?.scrollIntoView({behavior:smooth(), block:"start"}), 30);
+    return runDoctor();
+  }
+  if(a==="report-copy") return copyReport();
+  if(a==="export"){
+    try{
+      const r=await api("/api/export"); const url=URL.createObjectURL(new Blob([r.sql],{type:"application/sql"}));
+      const link=Object.assign(document.createElement("a"),{href:url, download:r.filename}); document.body.append(link); link.click(); link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 5000); toast(`已导出 ${r.filename}，在浏览器的下载文件夹里`);
+    }catch(e){ toast(e); }
+    return;
+  }
+  if(a==="restart") return restartDash();
+  if(a==="update") return startUpdate();
+}
+
 function versionSection(){
   const u=S.update; if(!u) return "";
   const latest=u.latest?.version;
@@ -1447,6 +1576,7 @@ function versionSection(){
       <p>当前 <b>v${esc(u.current)}</b>，${line}。</p>
       ${u.method==="fork"?`<p class="small faint">云端版的代码在你 fork 的仓库里：有新版本时到 GitHub 上你的仓库页面点 <b>Sync fork</b>，Cloudflare 会自动重新部署。</p>`:""}
       ${isLocal()?`<label class="optrow"><input type="checkbox" id="cfg-auto" ${u.auto?"checked":""}> 自动更新（有新版本时，在看板 10 分钟没人用、也没在生成推荐的时候自动更新）</label>`:""}
+      ${isLocal()&&S.autostart!=null?`<label class="optrow"><input type="checkbox" id="cfg-boot" ${S.autostart?"checked":""}> 开机后在后台自动运行（关掉的话，要用时从应用列表打开 The Robot Times）</label>`:""}
       <div class="actions">${act}${isLocal()?`<button class="btn" data-upd="check">检查更新</button>`:""}</div></section>`;
 }
 
@@ -1459,7 +1589,7 @@ function showUpdate(){
     el.hidden=false; return;
   }
   if(u && u.state==="failed"){
-    el.innerHTML=`<span>更新没成功：${esc(u.error||"")}。现在用的还是 v${esc(u.current)}。</span><span class="acts"><button class="btn link" data-upd="close">知道了</button></span>`;
+    el.innerHTML=`<span>更新没成功：${esc(u.error||"")}。现在用的还是 v${esc(u.current)}。</span><span class="acts">${actBtns(["logs"])}<button class="btn link" data-upd="close">知道了</button></span>`;
     el.hidden=false; return;
   }
   if(!u || !u.available || skip===u.latest.version){ el.hidden=true; return; }
@@ -1471,7 +1601,7 @@ function showUpdate(){
 let updTimer=null;
 async function startUpdate(){
   try{ S.update=await api("/api/update",{method:"POST"}); }
-  catch(e){ toast(e.message); return; }
+  catch(e){ toast(e); return; }
   showUpdate(); watchUpdate();
 }
 function watchUpdate(){
@@ -1779,7 +1909,7 @@ async function removeZotero(id){
   id=id||S.open; if(!id||zBusy) return;
   zBusy=true; if(S.open===id) refreshReader();
   try{ await api(`/api/zotero/${encodeURIComponent(id)}`,{method:"DELETE"}); delete S.zotero[id]; delete zWeb[id]; toast("已从 Zotero 撤销（移进了 Zotero 的回收站，需要时可以在那里恢复）"); }
-  catch(e){ toast(e.message); }
+  catch(e){ toast(e); }
   finally{ zBusy=false; if(S.open===id) refreshReader(); render(); }
 }
 function refreshReader(){
@@ -1814,7 +1944,7 @@ function flush(id){
   chain[id]=(chain[id]||Promise.resolve()).then(()=>api(`/api/notes/${encodeURIComponent(id)}`,{method:"PUT", body})).then(saved=>{
     pending[id]=false; S.notes[id]={...S.notes[id], updatedAt:saved.updatedAt};
     const sv=$("#saved"); if(sv&&S.open===id) sv.textContent="已保存";
-  }).catch(e=>{ pending[id]=false; const sv=$("#saved"); if(sv) sv.textContent="没保存上"; toast(e.message); });
+  }).catch(e=>{ pending[id]=false; const sv=$("#saved"); if(sv) sv.textContent="没保存上"; toast(e); });
 }
 window.addEventListener("beforeunload", e=>{ if(Object.values(pending).some(Boolean)){ e.preventDefault(); e.returnValue=""; } });
 
@@ -1831,7 +1961,7 @@ async function addZotero(id){
       : r.existing ? `已放进${where}`
       : `已加入 Zotero 的${where}${r.pdf?"，PDF 一起存进去了":""}${r.noteError?`（摘要笔记没写上：${r.noteError}）`:""}${isLocal()?"":`。同步后${r.pdf?"就能直接打开":"在条目上右键“查找可用的 PDF”"}`}`);
     zFix[id]=r.pdfError?"缺 PDF":false;
-  }catch(e){ toast(e.message); }
+  }catch(e){ toast(e); }
   finally{ zBusy=false; if(S.open===id) refreshReader(); else render(); }
 }
 async function sendFeedback(id, action, quiet){
@@ -1840,7 +1970,7 @@ async function sendFeedback(id, action, quiet){
   S.feedback[id] = next==="clear" ? undefined : next; if(S.open===id) refreshReader();
   try{ await api(`/api/feedback/${encodeURIComponent(id)}`,{method:"POST", body:JSON.stringify({action:next})});
     if(!quiet && next!=="clear") toast(next==="like"?"记下了，之后多推这类论文":"记下了，之后少推这类论文"); }
-  catch(e){ S.feedback[id]=prev; if(S.open===id) refreshReader(); toast(e.message); }
+  catch(e){ S.feedback[id]=prev; if(S.open===id) refreshReader(); toast(e); }
 }
 
 /* ---------- 问 AI ---------- */
@@ -1886,7 +2016,7 @@ async function saveCfg(){
   };
   try{ S.settings=await api("/api/config",{method:"PUT", body:JSON.stringify(body)}); S.wDraft=null;
     if(S.site){ const p=presetOf(S.settings.preset); S.site.name=S.settings.siteName||p?.siteName||S.site.name; } toast("设置已保存，下一次推荐会按新设置生成"); render(); }
-  catch(e){ toast(e.message); }
+  catch(e){ toast(e); }
   finally{ cfgSaving=false; }
 }
 async function runJob(job, btn){
@@ -1895,15 +2025,27 @@ async function runJob(job, btn){
     const st=await api(`/api/run/${job}`,{method:"POST"});
     S.job=st; showJob(); watchJob(); toast("已开始生成，好了会自动显示");
   }
-  catch(e){ toast(e.message); btn.disabled=false; }
+  catch(e){ toast(e); btn.disabled=false; }
 }
 
 /* 生成时在报头下显示进度，生成完自动刷新。本地版在本机后台跑；云端版是 GitHub 上的任务（打开看板时缺了会自动触发） */
 const isLocal = () => S.mode==="local";
 const jobBusy = j => !!(j && (j.running || (j.queue||[]).length));
+function failDismissed(at){ try{ return localStorage.getItem("fail-dismiss")===at; }catch{ return false; } }
 function showJob(){
   const el=$("#jobbar"), j=S.job;
-  if(!jobBusy(j)){ el.hidden=true; return; }
+  if(!jobBusy(j)){
+    const last=j?.last, LB={daily:"今天的推荐", news:"业界简报", weekly:"本周回顾"};
+    if(last && !last.ok && !failDismissed(last.at)){  // 上次生成失败：说清原因和办法，不只是一闪而过的提示
+      el.className="jobbar hintbar failbar";
+      el.innerHTML=`<span style="flex:1 1 360px"><b>${esc(last.title||"没生成成功")}</b>　${esc(LB[last.kind]||"")}没生成成功${last.hint?`。${esc(last.hint)}`:"。"}
+        ${last.message?`<details><summary class="small">报错原文（${esc(fmtTime(last.at))}）</summary><code class="small">${esc(last.message)}</code></details>`:""}</span>
+        <span class="acts">${actBtns(last.actions||(last.kind?["retry:"+last.kind]:[]))}<button class="btn link" data-act="fail-dismiss">知道了</button></span>`;
+      el.hidden=false; return;
+    }
+    el.className="jobbar"; el.hidden=true; return;
+  }
+  el.className="jobbar";
   const LBL={daily:"今天的推荐", news:"业界简报", weekly:"本周回顾"};
   const now=j.label||LBL[(j.queue||[])[0]]||"";
   const next=(j.queue||[]).filter(k=>LBL[k]!==now).map(k=>LBL[k]);
@@ -1921,7 +2063,8 @@ function watchJob(){
       clearInterval(jobTimer); jobTimer=null;
       await loadAll(); render();
       const last=j.last;
-      if(last && jobBusy(was)) toast(last.ok ? `生成好了${last.message?`：${last.message}`:""}` : `没生成成功：${last.message}`);
+      if(last && jobBusy(was) && last.ok) toast(`生成好了${last.message?`：${last.message}`:""}`);  // 失败的在上面的提示条里
+      showJob();
     }catch{}
   }, isLocal() ? 4000 : 20000);
 }
@@ -1954,10 +2097,12 @@ document.addEventListener("click", e=>{
   if(d.flag&&S.open){ const f=new Set(noteOf(S.open).flags||[]); f.has(d.flag)?f.delete(d.flag):f.add(d.flag); patchNote(S.open,{flags:[...f]}); refreshReader(); return; }
   if(d.fb&&S.open) return sendFeedback(S.open, d.fb);
   if(d.su) return suAction(d.su);
+  if(d.act) return doAct(d.act);
+  if(d.log) return openLogs(d.log);
   if(d.upd==="go") return startUpdate();
   if(d.upd==="skip"){ try{ localStorage.setItem("upd-skip", S.update?.latest?.version||""); }catch{} return showUpdate(); }
   if(d.upd==="close"){ $("#updbar").hidden=true; return; }
-  if(d.upd==="check"){ api("/api/update?check=1").then(u=>{ S.update=u; render(); showUpdate(); toast(u.available?`有新版本 v${u.latest.version}`:"已经是最新版本"); }).catch(e=>toast(e.message)); return; }
+  if(d.upd==="check"){ api("/api/update?check=1").then(u=>{ S.update=u; render(); showUpdate(); toast(u.available?`有新版本 v${u.latest.version}`:"已经是最新版本"); }).catch(e=>toast(e)); return; }
   if(d.run) return runJob(d.run, t);
   if(t.id==="z-add") return addZotero();
   if(t.id==="z-del") return removeZotero();
@@ -1974,7 +2119,8 @@ document.addEventListener("input", e=>{
   if(t.id&&t.id.startsWith("su-")){ suDraft(); return; }
   if(t.id==="note-ta"&&S.open){ patchNote(S.open,{note:t.value},900); return; }
   if(t.id==="lib-q"){ S.lib.q=t.value; clearTimeout(libTimer); libTimer=setTimeout(()=>loadLib(),300); return; }
-  if(t.id==="cfg-auto"){ api("/api/config",{method:"PUT", body:JSON.stringify({autoUpdate:t.checked})}).then(s=>{ S.settings=s; if(S.update) S.update.auto=t.checked; toast(t.checked?"已打开自动更新":"已关掉自动更新"); }).catch(e=>toast(e.message)); return; }
+  if(t.id==="cfg-boot"){ api("/api/autostart",{method:"PUT", body:JSON.stringify({on:t.checked})}).then(r=>{ S.autostart=r.on; toast(r.on?"开机后会自动在后台运行":"已关掉开机自动运行"); }).catch(e=>{ t.checked=!t.checked; toast(e); }); return; }
+  if(t.id==="cfg-auto"){ api("/api/config",{method:"PUT", body:JSON.stringify({autoUpdate:t.checked})}).then(s=>{ S.settings=s; if(S.update) S.update.auto=t.checked; toast(t.checked?"已打开自动更新":"已关掉自动更新"); }).catch(e=>toast(e)); return; }
   if(t.id==="cfg-div"){ $("#cfg-div-v").textContent=(+t.value).toFixed(1); return; }
   if(t.id?.startsWith("w-")){ const k=t.id.slice(2), w={...weights(), [k]:+t.value}; S.wDraft=w;
     $("#wv-"+k).textContent=(+t.value).toFixed(2); $("#formula").textContent=formula(w); }
@@ -2022,7 +2168,7 @@ function hideHint(){ try{ localStorage.setItem("hint-install","off"); }catch{} $
 
 async function loadAll(){
   const b=await api("/api/bootstrap");
-  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, setup:(S.setup?.reopened && !S.setup.done) ? S.setup : (b.setup||null), settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
+  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, autostart:b.autostart??null, setup:(S.setup?.reopened && !S.setup.done) ? S.setup : (b.setup||null), settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
     notes:b.notes||{}, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
     news:b.news||null, newsDates:b.newsDates||[], weather:S.weather?.live?S.weather:(b.weather||S.weather||null), site:b.site||null});
   if(b.news) S.newsCache[b.news.date]=b.news;

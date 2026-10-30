@@ -165,3 +165,79 @@ def _spawn(cmd: list[str]) -> None:
 
 def _run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=False, capture_output=True, timeout=20)  # noqa: S603
+
+
+# ---------- 看板设置页里的“开机自动启动”开关 ----------
+# 安装包装的：Linux 的系统级自启动项在 /etc/xdg/autostart，用户目录里放一个 Hidden=true 的同名文件就能关掉；
+# macOS 是启动器登记的 LaunchAgent（关掉时留一个标记，启动器就不再登记）；Windows 是“启动”文件夹里的快捷方式。
+# 命令行装的：用上面的 plan_autostart。
+
+
+def packaged(env: dict[str, str]) -> bool:
+    return env.get("ROBOT_TIMES_PACKAGED") == "1"
+
+
+def _startup_dir(home: Path, env: dict[str, str]) -> Path:
+    return (Path(env.get("APPDATA") or home / "AppData" / "Roaming")
+            / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup")  # fmt: skip
+
+
+def autostart_on(platform: str, home: Path, env: dict[str, str]) -> bool:
+    data = Path(env.get("ROBOT_TIMES_HOME") or home / ".robot-times")
+    if not packaged(env):
+        return any(p.parent.name in ("autostart", "LaunchAgents", "Startup")
+                   for p in installed(platform, home, env))  # fmt: skip
+    if platform == "darwin":
+        return not (data / "autostart-off").exists()
+    if platform == "win32":
+        d = _startup_dir(home, env)
+        return (d / f"{NAME}.lnk").exists() or (d / f"{NAME}.vbs").exists()
+    override = home / ".config" / "autostart" / "the-robot-times.desktop"
+    return not (
+        override.exists() and "Hidden=true" in override.read_text(encoding="utf-8", errors="ignore")
+    )
+
+
+def set_autostart(on: bool, platform: str, home: Path, env: dict[str, str], workdir: Path) -> None:
+    data = Path(env.get("ROBOT_TIMES_HOME") or home / ".robot-times")
+    if not packaged(env):
+        plan = plan_autostart(platform, home, workdir, env)
+        if on:
+            apply(plan, start=False, running=lambda: True)
+        else:
+            remove(plan)
+        return
+    launcher = env.get("ROBOT_TIMES_LAUNCHER", "")
+    if platform == "darwin":
+        flag, agent = data / "autostart-off", home / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+        if on:
+            flag.unlink(missing_ok=True)
+            agent.parent.mkdir(parents=True, exist_ok=True)
+            agent.write_bytes(plistlib.dumps({"Label": LABEL, "ProgramArguments": [launcher, "serve"],
+                                              "RunAtLoad": True}))  # fmt: skip
+        else:
+            data.mkdir(parents=True, exist_ok=True)
+            flag.write_text("用户在看板设置页里关掉了开机自动启动\n", encoding="utf-8")
+            agent.unlink(missing_ok=True)
+    elif platform == "win32":
+        d = _startup_dir(home, env)
+        if on:
+            d.mkdir(parents=True, exist_ok=True)
+            (d / f"{NAME}.vbs").write_bytes((
+                "' The Robot Times：登录后在后台启动看板。删掉这个文件就不再自动启动。\n"
+                f'CreateObject("WScript.Shell").Run "wscript ""{launcher}"" serve", 0, False\n'
+            ).encode("utf-16"))  # fmt: skip
+        else:
+            for f in (d / f"{NAME}.lnk", d / f"{NAME}.vbs"):
+                f.unlink(missing_ok=True)
+    else:
+        override = home / ".config" / "autostart" / "the-robot-times.desktop"
+        if on:
+            if override.exists() and "Hidden=true" in override.read_text(
+                encoding="utf-8", errors="ignore"
+            ):
+                override.unlink()
+        else:
+            override.parent.mkdir(parents=True, exist_ok=True)
+            override.write_text("[Desktop Entry]\nType=Application\nName=The Robot Times\nHidden=true\n",
+                                encoding="utf-8")  # fmt: skip
