@@ -135,7 +135,7 @@ def build(store: SqliteStore | None = None, *, background: bool = True) -> Local
 
     updater = Updater(store, busy=busy)
     pdf = os.environ.get("ROBOT_TIMES_ZOTERO_PDF", "1").lower() not in ("0", "false", "no")
-    return LocalApi(
+    api = LocalApi(
         store,
         zotero=zotero,
         llm=llm_from_env(),
@@ -145,3 +145,8 @@ def build(store: SqliteStore | None = None, *, background: bool = True) -> Local
         pdf=pdf,
         http=httpx.Client(timeout=60.0, follow_redirects=True),
     )
+    from .setup import Setup
+
+    zurl = os.environ.get("ROBOT_TIMES_ZOTERO_URL", ZOTERO_URL).rstrip("/").removesuffix("/api")
+    api.setup = Setup(store, api, base=zurl, key_file=KEY_FILE, env_file=ENV_FILE)
+    return api

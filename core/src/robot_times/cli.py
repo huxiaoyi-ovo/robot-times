@@ -530,7 +530,7 @@ def local_serve(
     except OSError:
         _fail(f"端口 {port} 被别的程序占用了，换个端口试试：--port 8766。")
     typer.secho(f"看板：{url}（关掉这个窗口或按 Ctrl+C 停止）", fg="green")
-    if api.jobs is not None:
+    if api.jobs is not None and api.ready():
         api.jobs.auto()
     if api.updater is not None:
         from .local.update import ticker

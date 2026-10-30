@@ -479,6 +479,21 @@ details[open] summary{margin-bottom:10px}
 .jobbar{display:flex;align-items:center;gap:10px;margin:14px auto 0;padding:9px 14px;border:1px solid var(--rule);font-family:var(--sans);font-size:13.5px;color:var(--text);background:var(--paper-2)}
 .jobbar[hidden]{display:none}
 .hintbar{justify-content:space-between;flex-wrap:wrap;row-gap:6px}.hintbar .acts{display:flex;gap:8px;align-items:center}.optrow{display:flex!important;gap:8px;align-items:flex-start;font-size:14px}.optrow input{width:auto;margin-top:4px}
+.setup{max-width:760px;margin:28px auto 40px}
+.setup h1{font-family:var(--serif);font-size:30px;margin:0 0 6px}
+.setup .lede{color:var(--mute);margin:0 0 22px}
+.step{border-top:1px solid var(--rule);padding:18px 0 20px;display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 14px}
+.step .n{width:26px;height:26px;border:1.5px solid var(--ink);border-radius:50%;display:grid;place-items:center;font-family:var(--sans);font-size:13px;font-weight:600}
+.step.ok .n{background:var(--ink);color:var(--paper)}
+.step.off{opacity:.45}
+.step h2{font-family:var(--sans);font-size:17px;margin:2px 0 8px}
+.step ul.checks{list-style:none;padding:0;margin:0 0 10px;font-size:14.5px;line-height:1.9}
+.step ul.checks li::before{content:"○ ";color:var(--faint)}
+.step ul.checks li.ok::before{content:"✓ ";color:var(--ink);font-weight:700}
+.step .help{font-size:14px;color:var(--text);background:var(--paper-2);padding:10px 14px;margin:6px 0 10px;line-height:1.7}
+.step label{display:block;margin:10px 0 4px;font-size:14px}
+.step select{font:inherit;padding:8px 10px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);width:100%}
+.step .err{color:#b3261e;font-size:14px;margin:8px 0 0}
 .updnotes{white-space:pre-wrap;margin:6px 0 0;color:var(--mute);font-size:13px;max-height:9em;overflow:auto}
 .hintbar kbd{font-family:var(--sans);font-size:12px;border:1px solid var(--rule);padding:0 5px}
 .jobbar .dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:jobpulse 1.2s ease-in-out infinite}
@@ -1316,6 +1331,103 @@ function viewCfg(){
     ${versionSection()}
   </div>`;
 }
+/* ---------- 第一次打开：设置引导（本地版） ---------- */
+const needsSetup = () => S.mode==="local" && S.setup && !S.setup.done;
+const SU = {st:null, folders:null, busy:"", err:{}, draft:{}, llmOk:false, llmSkip:false, timer:null};
+async function loadSetup(){
+  try{ SU.st=await api("/api/setup"); }catch(e){ SU.err.load=e.message; }
+  const z=SU.st?.zotero;
+  if(z?.authorized && !SU.folders){ api("/api/setup/collections").then(f=>{ SU.folders=f; render(); }).catch(()=>{}); }
+  if(z?.localApi && z?.versionOk!==false){ clearInterval(SU.timer); SU.timer=null; }
+  else if(!SU.timer){ SU.timer=setInterval(()=>{ if(needsSetup()) loadSetup().then(render); }, 3000); }  // 一直检测，用户在 Zotero 里点好了就自动往下走
+  if(SU.st?.llm?.configured) SU.llmOk=true;
+}
+function viewSetup(){
+  if(!SU.st){ loadSetup().then(render); return `<p class="mute">正在检测 Zotero……</p>`; }
+  const st=SU.st, z=st.zotero, s=st.settings||{}, d=SU.draft;
+  const zOk = z.running && z.versionOk!==false && z.localApi;
+  const authOk = z.authorized;
+  const dirOk = !!(d.interests ?? s.interests ?? "").trim();
+  const llmDone = SU.llmOk || SU.llmSkip;
+  const li=(ok,t)=>`<li class="${ok?"ok":""}">${t}</li>`;
+  const err=k=>SU.err[k]?`<p class="err">${esc(SU.err[k])}</p>`:"";
+  const mac=/Mac/.test(navigator.platform||""), win=/Win/.test(navigator.platform||"");
+  const settingsPath = mac ? "Zotero → 设置" : "编辑 → 设置";
+  let zHelp="";
+  if(!z.running) zHelp=`打开 Zotero。还没装的话，先到 <a href="https://www.zotero.org/download/" target="_blank" rel="noopener">zotero.org/download</a> 下载安装。打开后这里会自动往下走。`;
+  else if(z.versionOk===false) zHelp=`你的 Zotero 是 ${esc(z.version)}，需要 10 或更新的版本：到 <a href="https://www.zotero.org/download/" target="_blank" rel="noopener">zotero.org/download</a> 下载新版本安装（文献库不会丢）。`;
+  else if(!z.localApi) zHelp=`在 Zotero 里打开 <b>${settingsPath} → 高级</b>，勾选<b>“允许此计算机上的其他应用程序与 Zotero 通信”</b>。勾上后这里会自动往下走。`
+    + (z.canEnable?`<br>找不到的话，也可以让我帮你打开：先<b>完全退出 Zotero</b>，点下面的按钮，再重新打开 Zotero。<div class="actions" style="margin-top:8px"><button class="btn" data-su="enable" ${SU.busy?"disabled":""}>${SU.busy==="enable"?"正在打开…":"帮我打开这个开关"}</button></div>`:"");
+  const folders = SU.folders||[];
+  const cur = d.zoteroCollection ?? s.zoteroCollection ?? "";
+  return `<div class="setup">
+    <h1>欢迎使用 ${esc(S.site?.name||"The Robot Times")}</h1>
+    <p class="lede">四步设置好，之后每天早上打开这里就是你的论文早报。数据都留在这台电脑上。</p>
+
+    <section class="step ${zOk?"ok":""}"><span class="n">${zOk?"✓":"1"}</span><div>
+      <h2>连上 Zotero</h2>
+      <ul class="checks">${li(z.running,"Zotero 已经打开")}${li(z.running&&z.versionOk!==false, `版本 10 或更新${z.version?`（现在是 ${esc(z.version)}）`:""}`)}${li(z.localApi,"允许本机的程序访问")}</ul>
+      ${zOk?"":`<div class="help">${zHelp}</div>`}${err("enable")}
+      ${zOk?"":`<button class="btn link" data-su="recheck">重新检测</button>`}
+    </div></section>
+
+    <section class="step ${authOk?"ok":""} ${zOk?"":"off"}"><span class="n">${authOk?"✓":"2"}</span><div>
+      <h2>允许它把论文加进 Zotero</h2>
+      ${authOk?`<p class="mute">已经允许了。</p>`:`<p>点下面的按钮后，切到 Zotero，在弹出的窗口里点 <b>Always Allow</b>（总是允许）。</p>
+      <div class="actions"><button class="btn pri" data-su="auth" ${zOk&&!SU.busy?"":"disabled"}>${SU.busy==="auth"?"等你在 Zotero 里点 Always Allow…":"连接 Zotero"}</button></div>${err("auth")}`}
+    </div></section>
+
+    <section class="step ${dirOk&&authOk?"ok":""} ${authOk?"":"off"}"><span class="n">${dirOk&&authOk?"✓":"3"}</span><div>
+      <h2>你在研究什么</h2>
+      <label for="su-int">研究兴趣（一两句话，越具体推荐越准）</label>
+      <textarea id="su-int" rows="3" placeholder="例如：足式机器人运动控制、人形机器人全身控制、sim2real；不看纯视觉检测" ${authOk?"":"disabled"}>${esc(d.interests ?? s.interests ?? "")}</textarea>
+      <label for="su-cats">arXiv 分类（默认机器人 cs.RO；其他方向例如 cs.LG、cs.CV,cs.AI）</label>
+      <input type="text" id="su-cats" value="${esc(d.categories ?? (s.categories||[]).join(", "))}" ${authOk?"":"disabled"}>
+      <label for="su-folder">“加入 Zotero”时放进哪个文件夹</label>
+      <select id="su-folder" ${authOk?"":"disabled"}><option value="">我的文库（不放进文件夹）</option>${folders.map(f=>`<option ${f===cur?"selected":""}>${esc(f)}</option>`).join("")}</select>
+    </div></section>
+
+    <section class="step ${SU.llmOk?"ok":""} ${authOk?"":"off"}"><span class="n">${SU.llmOk?"✓":"4"}</span><div>
+      <h2>大模型（可以跳过，但强烈建议）</h2>
+      ${SU.llmOk?`<p class="mute">已经配好了，可以写中文摘要、全文解读和“问 AI”。</p>`:`
+      <p>有了它才有中文标题和摘要、全文解读、更准的排序和“问 AI”。默认用 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">DeepSeek</a>（注册后在 API keys 里创建密钥，充几块钱能用很久）。密钥只存在这台电脑上。</p>
+      <label for="su-key">密钥</label><input type="text" id="su-key" placeholder="sk-…" autocomplete="off" value="${esc(d.key||"")}" ${authOk?"":"disabled"}>
+      <details ${d.base||d.model?"open":""}><summary class="small">用其他 OpenAI 兼容的接口（包括本地 Ollama）</summary>
+        <label for="su-base">接口地址</label><input type="text" id="su-base" placeholder="https://api.deepseek.com" value="${esc(d.base||"")}">
+        <label for="su-model">模型名</label><input type="text" id="su-model" placeholder="deepseek-flash" value="${esc(d.model||"")}"></details>
+      <div class="actions"><button class="btn" data-su="llm" ${authOk&&!SU.busy?"":"disabled"}>${SU.busy==="llm"?"正在测试…":"测试并保存"}</button>${SU.llmSkip?`<span class="small faint">先跳过了，以后在设置页也能配</span>`:`<button class="btn link" data-su="skip" ${authOk?"":"disabled"}>先跳过</button>`}</div>${err("llm")}`}
+    </div></section>
+
+    <div class="actions" style="justify-content:flex-end;border-top:1px solid var(--rule);padding-top:18px">
+      ${err("finish")}<button class="btn pri" data-su="finish" ${zOk&&authOk&&llmDone&&!SU.busy?"":"disabled"}>开始使用</button></div>
+  </div>`;
+}
+function suDraft(){
+  const g=id=>document.getElementById(id);
+  if(g("su-int")) SU.draft.interests=g("su-int").value;
+  if(g("su-cats")) SU.draft.categories=g("su-cats").value;
+  if(g("su-folder")) SU.draft.zoteroCollection=g("su-folder").value;
+  if(g("su-key")) SU.draft.key=g("su-key").value;
+  if(g("su-base")) SU.draft.base=g("su-base").value;
+  if(g("su-model")) SU.draft.model=g("su-model").value;
+}
+async function suAction(what){
+  suDraft(); SU.err={};
+  const d=SU.draft;
+  const run=async(name, fn)=>{ SU.busy=name; render(); try{ await fn(); }catch(e){ SU.err[name]=e.message; } finally{ SU.busy=""; await loadSetup(); render(); } };
+  if(what==="recheck") return run("recheck", async()=>{});
+  if(what==="enable") return run("enable", async()=>{ await api("/api/setup/enable-api",{method:"POST"}); toast("已经打开了，现在重新打开 Zotero"); });
+  if(what==="auth") return run("auth", async()=>{ await api("/api/setup/authorize",{method:"POST"}); SU.folders=null; S.features.zotero=true; toast("连上了"); });
+  if(what==="skip"){ SU.llmSkip=true; return render(); }
+  if(what==="llm") return run("llm", async()=>{ await api("/api/setup/llm",{method:"PUT", body:JSON.stringify({key:d.key, base:d.base, model:d.model})}); SU.llmOk=true; S.features.ask=true; toast("大模型能用了"); });
+  if(what==="finish") return run("finish", async()=>{
+    const cats=(d.categories||"").split(/[，,、\s]+/).map(x=>x.trim()).filter(Boolean);
+    await api("/api/setup/finish",{method:"POST", body:JSON.stringify({interests:d.interests ?? SU.st.settings.interests, zoteroCollection:d.zoteroCollection ?? SU.st.settings.zoteroCollection ?? "", ...(cats.length?{categories:cats}:{})})});
+    clearInterval(SU.timer); SU.timer=null;
+    await loadAll(); S.tab="today"; showJob(); watchJob(); toast("开始生成今天的推荐了，第一次要几分钟");
+  });
+}
+
 function versionSection(){
   const u=S.update; if(!u) return "";
   const latest=u.latest?.version;
@@ -1485,6 +1597,7 @@ function render(){
   if(S.error){ m.innerHTML=`${emptyBox("打不开数据", esc(S.error), true)}<div class="actions" style="margin-top:12px"><button class="btn" onclick="location.reload()">重新载入</button></div>`; return; }
   if(!S.ready) return;
   const a=document.activeElement, focusId=a?.id, selStart=a?.selectionStart;
+  if(needsSetup()){ m.innerHTML=viewSetup(); return; }
   m.innerHTML=({today:viewToday,news:viewNews,week:viewWeek,lib:viewLib,notes:viewNotes,cfg:viewCfg})[S.tab]()
     + `<footer class="colophon"><span>${esc(S.site?.name||"The Robot Times")}　由 arXiv 和 Hugging Face 的公开数据生成，摘要由大模型撰写，请以原文为准</span><span class="keys">快捷键：<kbd>J</kbd><kbd>K</kbd> 上下篇，<kbd>Enter</kbd> 打开，<kbd>←</kbd><kbd>→</kbd> 文章间切换，<kbd>Esc</kbd> 关闭</span></footer>`;
   if(focusId&&document.getElementById(focusId)&&!document.getElementById(focusId).closest(".reader")){ const el=document.getElementById(focusId); el.focus(); try{ if(selStart!=null) el.setSelectionRange(selStart,selStart);}catch(e){} }
@@ -1832,6 +1945,7 @@ document.addEventListener("click", e=>{
   if(d.st&&S.open){ setStatus(S.open, d.st); return; }
   if(d.flag&&S.open){ const f=new Set(noteOf(S.open).flags||[]); f.has(d.flag)?f.delete(d.flag):f.add(d.flag); patchNote(S.open,{flags:[...f]}); refreshReader(); return; }
   if(d.fb&&S.open) return sendFeedback(S.open, d.fb);
+  if(d.su) return suAction(d.su);
   if(d.upd==="go") return startUpdate();
   if(d.upd==="skip"){ try{ localStorage.setItem("upd-skip", S.update?.latest?.version||""); }catch{} return showUpdate(); }
   if(d.upd==="close"){ $("#updbar").hidden=true; return; }
@@ -1849,6 +1963,7 @@ document.addEventListener("click", e=>{
 });
 document.addEventListener("input", e=>{
   const t=e.target;
+  if(t.id&&t.id.startsWith("su-")){ suDraft(); return; }
   if(t.id==="note-ta"&&S.open){ patchNote(S.open,{note:t.value},900); return; }
   if(t.id==="lib-q"){ S.lib.q=t.value; clearTimeout(libTimer); libTimer=setTimeout(()=>loadLib(),300); return; }
   if(t.id==="cfg-auto"){ api("/api/config",{method:"PUT", body:JSON.stringify({autoUpdate:t.checked})}).then(s=>{ S.settings=s; if(S.update) S.update.auto=t.checked; toast(t.checked?"已打开自动更新":"已关掉自动更新"); }).catch(e=>toast(e.message)); return; }
@@ -1899,7 +2014,7 @@ function hideHint(){ try{ localStorage.setItem("hint-install","off"); }catch{} $
 
 async function loadAll(){
   const b=await api("/api/bootstrap");
-  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
+  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, setup:b.setup||null, settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
     notes:b.notes||{}, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
     news:b.news||null, newsDates:b.newsDates||[], weather:S.weather?.live?S.weather:(b.weather||S.weather||null), site:b.site||null});
   if(b.news) S.newsCache[b.news.date]=b.news;

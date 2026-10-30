@@ -176,6 +176,7 @@ class LocalApi:
         llm_stream: Callable[[list[dict[str, str]]], Iterator[bytes]] | None = None,
         jobs: Any = None,  # jobs.Jobs：后台生成推荐、业界简报和周报
         updater: Any = None,  # update.Updater：检查和执行更新
+        setup: Any = None,  # setup.Setup：第一次打开时的设置引导
         pdf: bool = True,
         http: httpx.Client | None = None,
     ) -> None:
@@ -185,6 +186,7 @@ class LocalApi:
         self.llm_stream = llm_stream
         self.jobs = jobs
         self.updater = updater
+        self.setup = setup
         self.pdf = pdf
         self.http = http or httpx.Client(timeout=60.0, follow_redirects=True)
 
@@ -245,6 +247,8 @@ class LocalApi:
             if self.jobs is None:
                 raise ApiError(400, "这里不能生成。")
             return Reply(body=self.jobs.start(job, force=True))
+        if p.startswith("/api/setup"):
+            return self._setup_route(m, p, body)
         if p == "/api/update" and m in ("GET", "POST"):
             if self.updater is None:
                 raise ApiError(400, "这里不能更新。")
@@ -267,7 +271,7 @@ class LocalApi:
     def bootstrap(self) -> dict[str, Any]:
         st = self.store
         settings = repo.load_settings(st)
-        if self.jobs is not None:
+        if self.jobs is not None and self.ready():
             self.jobs.auto()  # 今天的还没生成就在后台补上
         days = [
             json.loads(r["data"])
@@ -315,12 +319,57 @@ class LocalApi:
             "site": site_info(settings),
             "job": self.jobs.status() if self.jobs else None,
             "update": self._update_status(),
+            "setup": {"done": self.ready()} if self.setup is not None else None,
             "features": {
                 "zotero": self.zotero is not None and bool(self.zotero.api_key),
                 "ask": self.llm is not None or self.llm_stream is not None,
                 "run": self.jobs is not None,
             },
         }
+
+    def ready(self) -> bool:
+        """设置引导做完了没有（没做完之前不自动生成，Zotero 和研究兴趣都还没有）。"""
+        return self.setup is None or self.setup.done()
+
+    def reload_llm(self) -> None:
+        """设置引导里配好大模型后马上生效，不用重启。"""
+        import os
+
+        from ..cloud.env import DEEPSEEK_BASE, DEEPSEEK_MODEL, llm_from_env
+
+        self.llm = llm_from_env()
+        key = os.environ.get("ROBOT_TIMES_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
+        self.llm_stream = (
+            stream_chat(
+                os.environ.get("ROBOT_TIMES_LLM_BASE_URL") or DEEPSEEK_BASE,
+                key,
+                os.environ.get("ROBOT_TIMES_LLM_MODEL") or DEEPSEEK_MODEL,
+            )
+            if key
+            else None
+        )
+
+    def _setup_route(self, m: str, p: str, body: Callable[[], dict[str, Any]]) -> Reply:
+        from .setup import SetupError
+
+        st = self.setup
+        if st is None:
+            raise ApiError(404, "没有这个接口。")
+        routes = {
+            ("GET", "/api/setup"): lambda: st.status(),
+            ("POST", "/api/setup/enable-api"): lambda: st.enable_local_api(),
+            ("POST", "/api/setup/authorize"): lambda: st.authorize(),
+            ("GET", "/api/setup/collections"): lambda: st.collections(),
+            ("PUT", "/api/setup/llm"): lambda: st.save_llm(body()),
+            ("POST", "/api/setup/finish"): lambda: st.finish(body()),
+        }
+        fn = routes.get((m, p))
+        if fn is None:
+            raise ApiError(404, "没有这个接口。")
+        try:
+            return Reply(body=fn())
+        except SetupError as e:
+            raise ApiError(400, str(e)) from None
 
     def _update_status(self) -> dict[str, Any] | None:
         """打开看板时顺便在后台查一下新版本（12 小时最多一次），不让页面等。"""
