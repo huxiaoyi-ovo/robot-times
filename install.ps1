@@ -39,7 +39,7 @@ else {
   $ans = Read-Host "  要装更准的向量模型吗？推荐更准，但要下载 1–2 GB（PyTorch）。[y/N]"
   if ($ans -match "^[yY]") { $extra = @("--extra", "embed") }
 }
-uv sync @extra
+uv sync --frozen @extra
 if ($LASTEXITCODE -ne 0) { Die "依赖没装上，看上面的报错。" }
 Ok "依赖装好了"
 

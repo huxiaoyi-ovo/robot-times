@@ -108,6 +108,25 @@ def test_git_update_moves_code_to_the_new_tag(tmp_path):
     assert 'version = "0.2.0"' in (work / "core" / "pyproject.toml").read_text()
 
 
+def test_git_update_ignores_rewritten_uv_lock(tmp_path):
+    up = make_upstream(tmp_path)
+    (up / "uv.lock").write_text("lock\n")
+    git("add", "-A", cwd=up)
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "lock", cwd=up)
+    git("tag", "-f", "v0.2.0", cwd=up)
+    work = tmp_path / "work"
+    git("clone", "-q", up.as_uri(), str(work), cwd=tmp_path)
+    git("reset", "-q", "--hard", "v0.1.0", cwd=work)
+    (work / "uv.lock").write_text("uv 改写过\n")  # 0.1.0 里没有 uv.lock，这里模拟 uv 自己生成的
+    git("add", "uv.lock", cwd=work)
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x", cwd=work)
+    (work / "uv.lock").write_text("又被 uv 改写了\n")
+    u = Updater(SqliteStore(), root=work)
+    u._sync = lambda: None
+    u.apply({"version": "0.2.0", "tag": "v0.2.0"})
+    assert (work / "uv.lock").read_text() == "lock\n"
+
+
 def test_git_update_refuses_when_user_changed_code(tmp_path):
     up = make_upstream(tmp_path)
     work = tmp_path / "work"

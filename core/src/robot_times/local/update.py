@@ -189,6 +189,10 @@ class Updater:
         self._sync()
 
     def _git(self, tag: str) -> None:
+        # uv.lock 是自动生成的，uv 有时会改写它，不算用户改过代码
+        self.run(["git", "checkout", "--", "uv.lock"], self.root) if (
+            self.root / "uv.lock"
+        ).exists() else None
         changed = _out(["git", "status", "--porcelain", "--untracked-files=no"], self.root)
         if changed.strip():
             raise UpdateError(
@@ -237,7 +241,7 @@ class Updater:
         uv = find_uv()
         if uv is None:
             raise UpdateError("找不到 uv，代码已经更新，请在代码文件夹里运行 uv sync 后重启看板。")
-        cmd = [uv, "sync"]
+        cmd = [uv, "sync", "--frozen"]  # 按仓库里的 uv.lock 装，不改写它
         try:
             import sentence_transformers  # noqa: F401
 

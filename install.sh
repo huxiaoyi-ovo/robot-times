@@ -79,7 +79,7 @@ else
   extra="--extra embed"
 fi
 # shellcheck disable=SC2086
-uv sync $extra
+uv sync --frozen $extra
 ok "依赖装好了"
 
 # ---------- 3. Zotero ----------
