@@ -1,0 +1,7 @@
+#!/bin/sh
+# The Robot Times 启动器（Linux / macOS）：用安装包自带的 uv 运行 bootstrap.py。
+#   launch open   打开看板（应用图标）
+#   launch serve  后台运行看板（开机自动启动）
+here="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+export UV_PYTHON_PREFERENCE=only-managed  # 用 uv 自己下载的 Python，不受系统 Python 影响
+exec "$here/uv" run --no-project --python 3.12 --quiet "$here/bootstrap.py" "${1:-open}"

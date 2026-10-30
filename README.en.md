@@ -27,18 +27,21 @@ Robotics is the default; switch fields in Settings.
 
 ## Quick start
 
-Runs on your own computer; your data stays local. About 10 minutes.
+Runs on your own computer; your data stays local. No terminal needed. About 5 minutes.
 
-1. **Zotero**: install [Zotero](https://www.zotero.org/download/) 10 or newer, open it, and enable
-   *Settings → Advanced → Allow other applications on this computer to communicate with Zotero*.
-2. **Install**:
-   - Linux / macOS: `curl -LsSf https://raw.githubusercontent.com/huxiaoyi-ovo/robot-times/main/install.sh | bash`
-   - Windows: [download the code](https://github.com/huxiaoyi-ovo/robot-times/archive/refs/heads/main.zip), unzip, open PowerShell in the folder and run
-     `powershell -ExecutionPolicy ByPass -File install.ps1`
+1. **Zotero**: install [Zotero](https://www.zotero.org/download/) 10 or newer and open it once.
+2. **Install**: download the installer for your system and double-click it —
+   [Windows](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/RobotTimes-Windows-Setup.exe) ·
+   [macOS](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/RobotTimes-macOS.pkg) ·
+   [Linux .deb (amd64)](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/robot-times_amd64.deb) ·
+   [Linux .deb (arm64)](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/robot-times_arm64.deb).
+   The installers are unsigned: on Windows click *More info → Run anyway*; on macOS allow it in *System Settings → Privacy & Security*.
+3. **Set up in the browser**: <http://localhost:8765> opens by itself (the first start downloads dependencies, about a minute)
+   and walks you through connecting Zotero (click **Always Allow**), your research interests, and an optional LLM key.
+   The dashboard starts at login from then on and updates itself.
 
-   The installer asks for your research interests, arXiv categories, a Zotero collection, and an optional LLM key.
-   Click **Always Allow** when Zotero asks for permission.
-3. **Open** <http://localhost:8765>. The first edition takes a few minutes. The dashboard starts at login from then on.
+Prefer the command line? `curl -LsSf https://raw.githubusercontent.com/huxiaoyi-ovo/robot-times/main/install.sh | bash`
+(Windows: `install.ps1` in the downloaded code).
 
 **LLM key** (optional, recommended): without it you get English abstracts only. With it you get translations, reviews, better ranking and "ask AI".
 DeepSeek is the default (a few cents a day); any OpenAI-compatible endpoint works, including Ollama. The key stays in `~/.robot-times/.env`.

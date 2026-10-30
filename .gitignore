@@ -11,3 +11,5 @@ plugin/dist/
 node_modules/
 .wrangler/
 .dev.vars
+build/
+dist/

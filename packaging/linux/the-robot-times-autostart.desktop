@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=The Robot Times（后台）
+Comment=登录后在后台运行论文早报看板
+Exec=/opt/robot-times/launch serve
+Icon=the-robot-times
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

@@ -32,50 +32,61 @@
 
 ## 快速开始
 
-装在你自己的电脑上，数据都留在本机，不需要注册任何服务。大约 10 分钟。
+装在你自己的电脑上，数据都留在本机，不需要注册任何服务，也不用开终端。大约 5 分钟。
 
-**第 1 步：准备 Zotero**
+**第 1 步：装好 Zotero**
 
-装好 [Zotero](https://www.zotero.org/download/) 10 或更新版本并打开，在 **设置 → 高级** 里勾选
-“允许此计算机上的其他应用程序与 Zotero 通信”。
+装好 [Zotero](https://www.zotero.org/download/) 10 或更新版本，打开一次就行。
 
-**第 2 步：运行安装命令**
+**第 2 步：下载安装包，双击安装**
 
-Linux / macOS，在终端里运行：
-
-```bash
-curl -LsSf https://raw.githubusercontent.com/huxiaoyi-ovo/robot-times/main/install.sh | bash
-```
-
-Windows：[下载代码](https://github.com/huxiaoyi-ovo/robot-times/archive/refs/heads/main.zip)并解压，在文件夹里打开 PowerShell，运行：
-
-```powershell
-powershell -ExecutionPolicy ByPass -File install.ps1
-```
-
-安装过程中会问你几个问题：
-
-| 问题 | 怎么填 |
+| 系统 | 下载 |
 | --- | --- |
-| 研究兴趣 | 一两句话，越具体推荐越准，例如“足式机器人运动控制、sim2real；不看纯视觉检测” |
-| arXiv 分类 | 机器人方向直接回车；其他方向填分类，例如 `cs.LG` 或 `cs.CV,cs.AI` |
-| Zotero 文件夹 | “加入 Zotero”时放进哪个文件夹；回车就放在“我的文库” |
-| 大模型密钥 | 可以跳过，但强烈建议填，见下面的说明 |
+| Windows 10 / 11 | [RobotTimes-Windows-Setup.exe](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/RobotTimes-Windows-Setup.exe) |
+| macOS 11 及以上（Intel 和 M 系列都行） | [RobotTimes-macOS.pkg](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/RobotTimes-macOS.pkg) |
+| Ubuntu / Debian 等（大多数电脑） | [robot-times_amd64.deb](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/robot-times_amd64.deb) |
+| Ubuntu / Debian 等（ARM，比如树莓派） | [robot-times_arm64.deb](https://github.com/huxiaoyi-ovo/robot-times/releases/latest/download/robot-times_arm64.deb) |
 
-Zotero 弹出授权窗口时，点 **Always Allow**。
+安装包没有花钱买开发者签名，系统第一次会拦一下：
 
-**第 3 步：打开看板**
+- **Windows**：出现“Windows 已保护你的电脑”时，点 **更多信息 → 仍要运行**。
+- **macOS**：提示“无法验证开发者”时，打开 **系统设置 → 隐私与安全性**，在下面点 **仍要打开**，再双击一次安装包。
+- **Linux**：双击 .deb 用“软件”安装；或者在下载文件夹里运行 `sudo apt install ./robot-times_amd64.deb`。
 
-装好后浏览器会自动打开 <http://localhost:8765>。第一次要几分钟生成今天的推荐，页面上会显示进度。
-以后开机就会在后台自动启动，收藏这个地址就行，也可以在应用列表里搜“The Robot Times”。
+**第 3 步：按网页上的引导设置**
+
+装好后浏览器会自动打开 <http://localhost:8765>（第一次要下载约一分钟的依赖）。网页上一步步带你：
+
+1. 连上 Zotero（页面上有按钮帮你打开 Zotero 的本地接口，Zotero 弹窗时点 **Always Allow**）
+2. 写一两句研究兴趣，选好 arXiv 分类和放论文的 Zotero 文件夹
+3. 填大模型密钥（可以先跳过）
+
+点“开始使用”后就开始生成今天的推荐。以后开机会在后台自动运行，打开应用列表里的 **The Robot Times** 就是今天的早报。
+有新版本时看板会自动更新，不用重新下载安装包。
 
 > **关于大模型密钥**：不填也能用，但只有英文摘要。填了才有中文标题和摘要、全文解读、更准的排序和“问 AI”。
 > 默认用 [DeepSeek](https://platform.deepseek.com)，每天几毛钱；也可以换成其他 OpenAI 兼容的接口，包括本地的 Ollama。
 > 密钥只存在你电脑上的 `~/.robot-times/.env` 里。
 
-遇到问题，看[本地版安装说明](docs/dev/local-setup.md)里的分步说明和常见问题。
+遇到问题，看[本地版安装说明](docs/dev/local-setup.md)里的常见问题。
 
 ## 其他安装方式
+
+<details>
+<summary><b>用命令行安装</b>（方便自己改代码）</summary>
+
+<br>
+
+Linux / macOS：
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/huxiaoyi-ovo/robot-times/main/install.sh | bash
+```
+
+Windows：[下载代码](https://github.com/huxiaoyi-ovo/robot-times/archive/refs/heads/main.zip)并解压，在文件夹里打开 PowerShell，运行
+`powershell -ExecutionPolicy ByPass -File install.ps1`。安装过程中会在终端里问研究兴趣、Zotero 文件夹和大模型密钥。
+
+</details>
 
 <details>
 <summary><b>让 AI 智能体帮你装</b>（Claude Code、Codex 等）</summary>

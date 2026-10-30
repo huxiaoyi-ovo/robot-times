@@ -1,0 +1,78 @@
+# 打安装包并挂到 GitHub Release 上：Linux .deb（amd64/arm64）、macOS .pkg、Windows .exe。
+# 文件名固定，下载链接一直是 https://github.com/<仓库>/releases/latest/download/<文件名>。
+# 推版本标签、在网页上发布 Release、或者手动运行（填标签）都会触发；重复上传会覆盖，不会出错。
+name: packages
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "给哪个版本打包（比如 v0.2.0）；填 main 只打包试试，不上传"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: packages-${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  TAG: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-amd64, os: ubuntu-latest, file: robot-times_amd64.deb }
+          - { target: linux-arm64, os: ubuntu-latest, file: robot-times_arm64.deb }
+          - { target: macos, os: macos-latest, file: RobotTimes-macOS.pkg }
+          - { target: windows, os: windows-latest, file: RobotTimes-Windows-Setup.exe }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - if: matrix.target == 'windows'
+        run: pip install pillow
+      - name: 打包
+        run: python packaging/build.py ${{ matrix.target }}
+      - name: 真装一遍试试（Linux）
+        if: matrix.target == 'linux-amd64'
+        run: |
+          sudo apt-get install -y ./dist/${{ matrix.file }}
+          /opt/robot-times/launch serve &
+          for i in $(seq 1 120); do curl -sf http://127.0.0.1:8765/api/job && break; sleep 2; done
+          curl -sf http://127.0.0.1:8765/api/bootstrap | python -c "import json,sys; b=json.load(sys.stdin); assert b['mode']=='local' and b['setup']=={'done': False}, b; print('看板起来了，显示设置引导')"
+          sudo apt-get remove -y robot-times
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/${{ matrix.file }}
+
+  upload:
+    needs: build
+    if: startsWith(inputs.tag || github.event.release.tag_name || github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 挂到 Release 上
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # release.yml 跑完测试才建 Release，这里最多等 15 分钟
+          for i in $(seq 1 90); do gh release view "$TAG" >/dev/null 2>&1 && break; sleep 10; done
+          gh release upload "$TAG" dist/* --clobber

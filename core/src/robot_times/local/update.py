@@ -257,7 +257,8 @@ class UpdateError(RuntimeError):
 
 def find_uv() -> str | None:
     home = Path.home()
-    for p in (shutil.which("uv"), home / ".local/bin/uv", home / ".cargo/bin/uv",
+    # 安装包版：启动器把自带的 uv 的位置放在 ROBOT_TIMES_UV 里
+    for p in (os.environ.get("ROBOT_TIMES_UV"), shutil.which("uv"), home / ".local/bin/uv", home / ".cargo/bin/uv",
               home / ".local/bin/uv.exe", home / ".cargo/bin/uv.exe"):  # fmt: skip
         if p and Path(p).exists():
             return str(p)

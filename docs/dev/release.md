@@ -17,13 +17,19 @@
    也可以在网页上发：仓库的 **Releases → Draft a new release**，Choose a tag 里输入 `v0.2.0` 新建，
    标题写 `v0.2.0`，说明粘贴 CHANGELOG 里那一段，点 **Publish release**。
 
+发布后 `packages.yml` 会打好四个安装包（Linux .deb amd64/arm64、macOS .pkg、Windows .exe）挂到这个 Release 上，
+大约 10 分钟。README 里的下载链接指向 `releases/latest/download/<文件名>`，不用改。
+想先试试打包：Actions → packages → Run workflow，标签填 `main`（只打包不上传，产物在运行页面下载）。
+本地打 Linux 包：`python packaging/build.py linux-amd64`，产物在 `dist/`。
+
 版本号规则：修 bug 加最后一位（0.1.1），加功能加中间一位（0.2.0）。
 
 ## 用户那边会发生什么
 
 - **本地版**：看板 12 小时内会查到新版本。报头下面提示“有新版本”，点“更新”就会下载新代码、装依赖、自动重启，页面自己刷新。
   开着“自动更新”时（默认开），会在看板 10 分钟没人用、也没在生成推荐的时候自己更新。
-  用 git 装的切到新标签；下载压缩包装的（Windows）替换代码文件夹；用户改过代码就不动，只提示。
+  用 git 装的切到新标签；安装包装的和下载压缩包装的替换代码文件夹（`~/.robot-times/app`）；用户改过代码就不动，只提示。
+  已经装过的人不需要重新下载安装包；重新装了更新版本的安装包，下次启动时换上安装包里的代码。
 - **云端版**：看板提示有新版本，用户到自己 fork 的仓库页面点 **Sync fork**，Cloudflare 会自动重新部署。
 
 ## 改数据库结构时

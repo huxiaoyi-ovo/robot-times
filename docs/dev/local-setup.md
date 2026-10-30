@@ -3,9 +3,27 @@
 数据和看板都在你的电脑上，不需要 GitHub、Cloudflare，也不需要 Zotero 账号密钥。
 代价是电脑要开着才会生成，手机上看不了；想要这两样，用[云端版](cloud-setup.md)。
 
-大约 10 分钟。
+## 安装包（推荐）
 
-## 一键安装
+从 [最新版本](https://github.com/huxiaoyi-ovo/robot-times/releases/latest) 下载你系统的安装包，双击安装，
+然后在自动打开的网页上按引导设置（连 Zotero、填研究兴趣、配大模型）。详见 [README](../../README.md#快速开始)。
+
+安装包里只有一个 [uv](https://docs.astral.sh/uv/) 和项目代码。第一次打开时：
+
+- 代码复制到 `~/.robot-times/app`（以后的自动更新只改这里，不需要管理员密码）
+- uv 下载 Python 3.12 和依赖（装在 `~/.robot-times/app/.venv`，日志在 `~/.robot-times/setup.log`）
+- 浏览器先显示“正在准备”，好了自动变成设置引导
+
+开机自动启动：Linux 是 `/etc/xdg/autostart/the-robot-times.desktop`，Windows 是“启动”文件夹里的快捷方式，
+macOS 是第一次打开时登记的 `~/Library/LaunchAgents/com.therobottimes.dashboard.plist`。
+
+**卸载**：Linux `sudo apt remove robot-times`；Windows 在“设置 → 应用”里卸载；
+macOS 把“应用程序”里的 The Robot Times 拖进废纸篓，再删掉上面那个 LaunchAgents 文件。
+你的数据（推荐记录、设置、密钥）在 `~/.robot-times`，卸载不会删，不要了手动删掉这个文件夹。
+
+## 命令行安装
+
+适合想自己改代码的人。大约 10 分钟。
 
 先打开 Zotero（10 或更新版本），在 设置 → 高级 里勾选“允许此计算机上的其他应用程序与 Zotero 通信”。然后：
 

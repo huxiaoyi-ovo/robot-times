@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=The Robot Times
+GenericName=论文早报
+Comment=每天从 arXiv 里挑出该读的论文，写好解读，存进 Zotero
+Exec=/opt/robot-times/launch open
+Icon=the-robot-times
+Terminal=false
+Categories=Education;Science;Office;
+StartupNotify=false
