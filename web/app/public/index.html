@@ -1321,9 +1321,10 @@ function viewCfg(){
       <ul class="status-list">
         ${isLocal()?"":ck(true,`已登录：${esc(S.me)}`,"")}
         ${isLocal() ? `
-        ${ck(f.zotero,"可以写入 Zotero（本机）","还不能写入 Zotero：在终端运行 robot-times local init，在 Zotero 弹窗里点 Always Allow")}
-        ${ck(f.ask,"可以问 AI","还不能问 AI（可选）：在 ~/.robot-times/.env 里写一行 DEEPSEEK_API_KEY=你的密钥，再在终端运行 uv run robot-times local restart")}
-        ${ck(true,"数据存在这台电脑上（~/.robot-times/robot-times.db）","")}` : `
+        ${ck(f.zotero,"可以写入 Zotero（本机）","还不能写入 Zotero：点下面的按钮重新连接，在 Zotero 弹窗里点 Always Allow")}
+        ${ck(f.ask,"可以问 AI、写中文解读","还没配大模型（可选）：点下面的按钮填密钥")}
+        ${ck(true,"数据存在这台电脑上（~/.robot-times/robot-times.db）","")}
+        <li style="list-style:none"><div class="actions"><button class="btn" data-su="reopen">${f.zotero&&f.ask?"重新连接 Zotero、换大模型":"连接 Zotero、配大模型"}</button></div></li>` : `
         ${ck(f.zotero,"可以写入 Zotero","还不能写入 Zotero：在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY")}
         ${ck(f.ask,"可以问 AI","还不能问 AI：在 Cloudflare 给看板加上 DEEPSEEK_API_KEY")}
         ${ck(f.run,"可以在这里手动生成推荐","“立即生成”没开（可选）：在 Cloudflare 给看板加上 GITHUB_TOKEN")}`}
@@ -1361,8 +1362,9 @@ function viewSetup(){
   const folders = SU.folders||[];
   const cur = d.zoteroCollection ?? s.zoteroCollection ?? "";
   return `<div class="setup">
-    <h1>欢迎使用 ${esc(S.site?.name||"The Robot Times")}</h1>
-    <p class="lede">四步设置好，之后每天早上打开这里就是你的论文早报。数据都留在这台电脑上。</p>
+    ${S.setup?.reopened?`<p><button class="btn link" data-su="cancel">← 返回设置</button></p>`:""}
+    <h1>${S.setup?.reopened?"重新设置连接":`欢迎使用 ${esc(S.site?.name||"The Robot Times")}`}</h1>
+    <p class="lede">${S.setup?.reopened?"改好哪一步都行，最后点“保存”。":"四步设置好，之后每天早上打开这里就是你的论文早报。数据都留在这台电脑上。"}</p>
 
     <section class="step ${zOk?"ok":""}"><span class="n">${zOk?"✓":"1"}</span><div>
       <h2>连上 Zotero</h2>
@@ -1399,7 +1401,7 @@ function viewSetup(){
     </div></section>
 
     <div class="actions" style="justify-content:flex-end;border-top:1px solid var(--rule);padding-top:18px">
-      ${err("finish")}<button class="btn pri" data-su="finish" ${zOk&&authOk&&llmDone&&!SU.busy?"":"disabled"}>开始使用</button></div>
+      ${err("finish")}<button class="btn pri" data-su="finish" ${zOk&&authOk&&llmDone&&!SU.busy?"":"disabled"}>${S.setup?.reopened?"保存":"开始使用"}</button></div>
   </div>`;
 }
 function suDraft(){
@@ -1415,6 +1417,11 @@ async function suAction(what){
   suDraft(); SU.err={};
   const d=SU.draft;
   const run=async(name, fn)=>{ SU.busy=name; render(); try{ await fn(); }catch(e){ SU.err[name]=e.message; } finally{ SU.busy=""; await loadSetup(); render(); } };
+  if(what==="reopen"){  // 设置页里重新打开引导：重新连 Zotero、换大模型
+    Object.assign(SU,{st:null, folders:null, draft:{}, llmOk:false, llmSkip:false}); S.setup={done:false, reopened:true};
+    window.scrollTo(0,0); return render();
+  }
+  if(what==="cancel"){ clearInterval(SU.timer); SU.timer=null; S.setup={done:true}; return render(); }
   if(what==="recheck") return run("recheck", async()=>{});
   if(what==="enable") return run("enable", async()=>{ await api("/api/setup/enable-api",{method:"POST"}); toast("已经打开了，现在重新打开 Zotero"); });
   if(what==="auth") return run("auth", async()=>{ await api("/api/setup/authorize",{method:"POST"}); SU.folders=null; S.features.zotero=true; toast("连上了"); });
@@ -1423,7 +1430,7 @@ async function suAction(what){
   if(what==="finish") return run("finish", async()=>{
     const cats=(d.categories||"").split(/[，,、\s]+/).map(x=>x.trim()).filter(Boolean);
     await api("/api/setup/finish",{method:"POST", body:JSON.stringify({interests:d.interests ?? SU.st.settings.interests, zoteroCollection:d.zoteroCollection ?? SU.st.settings.zoteroCollection ?? "", ...(cats.length?{categories:cats}:{})})});
-    clearInterval(SU.timer); SU.timer=null;
+    clearInterval(SU.timer); SU.timer=null; S.setup=null;
     await loadAll(); S.tab="today"; showJob(); watchJob(); toast("开始生成今天的推荐了，第一次要几分钟");
   });
 }
@@ -2014,7 +2021,7 @@ function hideHint(){ try{ localStorage.setItem("hint-install","off"); }catch{} $
 
 async function loadAll(){
   const b=await api("/api/bootstrap");
-  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, setup:b.setup||null, settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
+  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, setup:(S.setup?.reopened && !S.setup.done) ? S.setup : (b.setup||null), settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
     notes:b.notes||{}, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
     news:b.news||null, newsDates:b.newsDates||[], weather:S.weather?.live?S.weather:(b.weather||S.weather||null), site:b.site||null});
   if(b.news) S.newsCache[b.news.date]=b.news;

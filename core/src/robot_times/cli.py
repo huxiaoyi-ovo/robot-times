@@ -71,22 +71,24 @@ def doctor() -> None:
         )
     typer.echo(
         f"{'✓' if KEY_FILE.exists() else '·'} Zotero 写入权限"
-        + ("" if KEY_FILE.exists() else "：未申请，运行 robot-times local init")
+        + (
+            ""
+            if KEY_FILE.exists()
+            else "：未申请，在看板 http://localhost:8765/ 的设置引导里点“连接 Zotero”"
+        )
     )
     typer.echo(
         f"{'✓' if has_llm else '·'} 大模型"
-        + (
-            ""
-            if has_llm
-            else f"：未配置（可选），在 {CONFIG_DIR / '.env'} 里写 DEEPSEEK_API_KEY=你的密钥"
-        )
+        + ("" if has_llm else "：未配置（可选），在看板的设置引导或“设置”页里填密钥")
     )
     try:
         import sentence_transformers  # noqa: F401
 
         typer.echo(f"✓ 向量模型：{s.embed_model}")
     except ImportError:
-        typer.echo("· 向量模型未安装，将用词袋向量。安装：uv sync --extra embed")
+        typer.echo(
+            "· 向量模型未安装，用词袋向量（命令行安装的可以在代码文件夹里 uv sync --extra embed）"
+        )
     typer.echo(f"· arXiv 分类：{', '.join(s.arxiv_categories)}")
 
 

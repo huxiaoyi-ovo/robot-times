@@ -88,14 +88,18 @@ Windows：[下载代码](https://github.com/huxiaoyi-ovo/robot-times/archive/ref
 
 </details>
 
-<details>
-<summary><b>让 AI 智能体帮你装</b>（Claude Code、Codex 等）</summary>
+<details open>
+<summary><b>让 AI 智能体帮你装</b>（Codex、Claude Code、Cursor 等，连命令都不用敲）</summary>
 
 <br>
 
-用智能体打开这个仓库，跟它说“帮我装好 The Robot Times”。仓库里带了安装说明
-（[`.claude/skills/robot-times-setup`](.claude/skills/robot-times-setup/SKILL.md)，其他智能体看 [`AGENTS.md`](AGENTS.md)），
-它会先问你几个问题，再一步步装好、确认能用；出了问题也能照着里面的排错表处理。
+把下面这句话发给能在你电脑上运行命令的智能体：
+
+> 帮我装好 The Robot Times：https://github.com/huxiaoyi-ovo/robot-times ，按仓库里 `.claude/skills/robot-times-setup/SKILL.md` 的步骤做。
+
+它会先问你研究兴趣等几个问题，然后下载安装包装好、替你连上 Zotero、填好设置，最后确认能用。
+你只需要：输一次管理员密码（Linux / macOS）、在 Zotero 弹窗里点 **Always Allow**、在网页上粘贴大模型密钥。
+说明在 [`.claude/skills/robot-times-setup`](.claude/skills/robot-times-setup/SKILL.md)（其他智能体看 [`AGENTS.md`](AGENTS.md)），出了问题它也能照着里面的排错表处理。
 
 </details>
 

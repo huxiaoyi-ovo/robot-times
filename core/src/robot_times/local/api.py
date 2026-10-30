@@ -455,7 +455,7 @@ class LocalApi:
         if self.zotero is None or not self.zotero.api_key:
             raise ApiError(
                 400,
-                "还不能写入 Zotero：运行 robot-times local init，在 Zotero 弹窗里点 Always Allow。",
+                "还不能写入 Zotero：到“设置”页点“连接 Zotero”，在 Zotero 弹窗里点 Always Allow。",
             )
         return self.zotero
 

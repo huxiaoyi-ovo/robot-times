@@ -2,7 +2,7 @@
 
 配置都在 ~/.robot-times（可以用环境变量 ROBOT_TIMES_HOME 换地方）：
   robot-times.db     数据库：推荐、笔记、设置、业界简报
-  zotero_key    Zotero 写入权限（robot-times local init 时在 Zotero 弹窗里点 Always Allow 得到）
+  zotero_key    Zotero 写入权限（设置引导里点“连接 Zotero”、在 Zotero 弹窗里点 Always Allow 得到）
   .env          可选：大模型密钥，例如 DEEPSEEK_API_KEY=...；还可以填 ROBOT_TIMES_LLM_BASE_URL、
                 ROBOT_TIMES_LLM_API_KEY、ROBOT_TIMES_LLM_MODEL 换成其他 OpenAI 兼容的模型
 """

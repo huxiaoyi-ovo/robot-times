@@ -158,7 +158,7 @@ def test_zotero_errors_are_readable():
     assert status == 400 and "找不到名为“不存在”的文件夹" in r["error"]
     api.zotero = None
     status, r = call(api, "POST", "/api/zotero/2610.00001")
-    assert status == 400 and "robot-times local init" in r["error"]
+    assert status == 400 and "Always Allow" in r["error"]
 
 
 def test_bootstrap_notes_feedback_search_and_settings():
