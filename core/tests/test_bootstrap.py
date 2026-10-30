@@ -87,3 +87,16 @@ def test_update_uses_the_bundled_uv(monkeypatch, tmp_path):
     uv.write_text("")
     monkeypatch.setenv("ROBOT_TIMES_UV", str(uv))
     assert update.find_uv() == str(uv)
+
+
+def test_prepare_takes_over_a_lock_left_by_a_killed_run(boot, monkeypatch):
+    import os
+    import time
+
+    monkeypatch.setattr(boot, "ensure_env", lambda log: None)
+    lock = boot.HOME / ".preparing"
+    lock.mkdir(parents=True)
+    old = time.time() - 3600
+    os.utime(lock, (old, old))
+    boot.prepare(log=lambda m: None)
+    assert boot.version(boot.APP) == (0, 2, 0) and not lock.exists()

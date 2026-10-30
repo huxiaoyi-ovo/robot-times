@@ -47,14 +47,35 @@ jobs:
         run: pip install pillow
       - name: 打包
         run: python packaging/build.py ${{ matrix.target }}
+      # 真装一遍，用开机自动启动的方式启动，确认看板起来了、显示设置引导
       - name: 真装一遍试试（Linux）
         if: matrix.target == 'linux-amd64'
         run: |
           sudo apt-get install -y ./dist/${{ matrix.file }}
           /opt/robot-times/launch serve &
-          for i in $(seq 1 120); do curl -sf http://127.0.0.1:8765/api/job && break; sleep 2; done
+      - name: 真装一遍试试（macOS）
+        if: matrix.target == 'macos'
+        run: |
+          sudo installer -pkg dist/${{ matrix.file }} -target /
+          "/Applications/The Robot Times.app/Contents/Resources/launch" serve &
+      - name: 真装一遍试试（Windows）
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          Start-Process -Wait dist\${{ matrix.file }} -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'
+          $app = "$env:LOCALAPPDATA\Programs\The Robot Times"
+          Get-ChildItem $app | Select-Object Name
+          Start-Process -Wait wscript.exe -ArgumentList "`"$app\launch.vbs`"",'serve'
+      - name: 看板起来了吗
+        if: matrix.target != 'linux-arm64'
+        shell: bash
+        run: |
+          for i in $(seq 1 150); do curl -sf http://127.0.0.1:8765/api/job && break; sleep 2; done
           curl -sf http://127.0.0.1:8765/api/bootstrap | python -c "import json,sys; b=json.load(sys.stdin); assert b['mode']=='local' and b['setup']=={'done': False}, b; print('看板起来了，显示设置引导')"
-          sudo apt-get remove -y robot-times
+      - name: 出错时看日志
+        if: failure()
+        shell: bash
+        run: cat ~/.robot-times/setup.log ~/.robot-times/serve.log 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}

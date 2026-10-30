@@ -114,6 +114,38 @@ def ensure_env(log=print) -> None:
     marker().write_text(lock_id())
 
 
+def needs_prepare() -> bool:
+    return not (
+        (APP / "core").exists() and version(APP) >= version(PAYLOAD / "app") and env_ready()
+    )
+
+
+def prepare(log=print) -> None:
+    """复制代码、装依赖。同时点了两次图标、或者开机启动和点图标撞在一起时，只让一个进程做，另一个等着。"""
+    HOME.mkdir(parents=True, exist_ok=True)
+    lock = HOME / ".preparing"
+    end = time.time() + 900
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            try:
+                stale = time.time() - lock.stat().st_mtime > 900  # 上次准备到一半被关掉了
+            except OSError:
+                continue
+            if stale or time.time() > end:
+                shutil.rmtree(lock, ignore_errors=True)
+                continue
+            log("另一个窗口正在准备，稍等……")
+            time.sleep(2)
+    try:
+        ensure_app(log)
+        ensure_env(log)
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
+
+
 def _env() -> dict[str, str]:
     env = dict(os.environ)
     env.update({"PYTHONUTF8": "1", "ROBOT_TIMES_UV": uv(), "ROBOT_TIMES_PACKAGED": "1"})
@@ -226,8 +258,10 @@ def cmd_serve() -> int:
     if running():
         return 0
     register_autostart()
-    ensure_app()
-    ensure_env()
+    if needs_prepare():
+        prepare()
+    if running():  # 等的时候别的进程已经把看板启动了
+        return 0
     if WIN:  # 不占着安装目录里的 uv.exe，升级安装包时才能替换
         spawn(serve_cmd())
         return 0
@@ -241,7 +275,7 @@ def cmd_open() -> int:
         webbrowser.open(URL)
         return 0
     register_autostart()
-    if (APP / "core").exists() and not ensure_app() and env_ready():
+    if not needs_prepare():
         spawn(serve_cmd())  # 已经准备好了：直接启动
         wait_running(30)
         webbrowser.open(URL)
@@ -254,8 +288,7 @@ def cmd_open() -> int:
         webbrowser.open(URL)
     say = prep.say if prep else print
     try:
-        ensure_app(log=say)
-        ensure_env(log=say)
+        prepare(log=say)
     except SystemExit as e:
         say(str(e))
         if prep:
