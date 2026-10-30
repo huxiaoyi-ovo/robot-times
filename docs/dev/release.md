@@ -14,6 +14,9 @@
 
    `release.yml` 会检查版本号一致、跑测试，然后建好 Release。
 
+   也可以在网页上发：仓库的 **Releases → Draft a new release**，Choose a tag 里输入 `v0.2.0` 新建，
+   标题写 `v0.2.0`，说明粘贴 CHANGELOG 里那一段，点 **Publish release**。
+
 版本号规则：修 bug 加最后一位（0.1.1），加功能加中间一位（0.2.0）。
 
 ## 用户那边会发生什么

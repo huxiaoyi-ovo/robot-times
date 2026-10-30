@@ -1,5 +1,6 @@
-# 发布新版本：先把 core/pyproject.toml 的 version 改成新版本号并推到 main，再打标签推上去：
+# 发布新版本：先把 core/pyproject.toml 的 version 改成新版本号并推到 main，再打标签推上去
 #   git tag v0.2.0 && git push origin v0.2.0
+# 或者在 GitHub 网页上 Releases → Draft a new release，新建标签 v0.2.0 发布（见 docs/dev/release.md）。
 # 这里会检查版本号一致、测试通过，然后建 GitHub Release（更新说明取 CHANGELOG.md 里这个版本的那一段）。
 # 用户的看板每天检查一次最新 Release，有新版本就提示更新。
 name: release
@@ -35,4 +36,10 @@ jobs:
       - name: 发布
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+        run: |
+          # 在网页上点“发布”建的 Release 已经存在，就只补上更新说明
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            [ -n "$(gh release view "$GITHUB_REF_NAME" --json body -q .body)" ] || gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          fi
