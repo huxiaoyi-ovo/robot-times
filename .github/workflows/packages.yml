@@ -22,6 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  PYTHONUTF8: "1"
   TAG: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
 
 jobs:

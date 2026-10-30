@@ -7,4 +7,5 @@ dir = fs.GetParentFolderName(WScript.ScriptFullName)
 cmd = "open"
 If WScript.Arguments.Count > 0 Then cmd = WScript.Arguments(0)
 sh.Environment("Process")("UV_PYTHON_PREFERENCE") = "only-managed"
+sh.Environment("Process")("PYTHONUTF8") = "1"
 sh.Run """" & dir & "\uv.exe"" run --no-project --python 3.12 --quiet """ & dir & "\bootstrap.py"" " & cmd, 0, False

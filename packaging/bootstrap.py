@@ -292,6 +292,11 @@ def register_autostart() -> None:
 
 
 def main(argv: list[str]) -> int:
+    for stream in (sys.stdout, sys.stderr):  # 英文 Windows 的控制台编码打不出中文，别因为这个崩掉
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     cmd = argv[1] if len(argv) > 1 else "open"
     if cmd == "serve":
         return cmd_serve()
