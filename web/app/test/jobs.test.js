@@ -101,3 +101,26 @@ test("没配 GitHub 时不触发；看板接口返回进度", async () => {
   assert.equal(started.running, "news");
   assert.deepEqual(gh.dispatched, [["news", { ref: "main" }]]);
 });
+
+test("云端版的新版本提示：12 小时查一次，提示去 GitHub 同步", async () => {
+  const { cloudUpdate } = await import("../src/index.js");
+  const { VERSION } = await import("../src/presets.js");
+  const DB = fakeD1();
+  let calls = 0;
+  globalThis.fetch = async (url) => {
+    calls++;
+    assert.match(String(url), /\/repos\/huxiaoyi-ovo\/robot-times\/releases\/latest$/);
+    return new Response(JSON.stringify({ tag_name: "v99.0.0", body: "新功能", html_url: "https://x/r" }));
+  };
+  const env = { DB, GITHUB_TOKEN: "T", GITHUB_REPO: "me/robot-times" };
+  const now = Date.parse("2026-10-30T00:00:00Z");
+  const u = await cloudUpdate(env, now);
+  assert.equal(u.current, VERSION);
+  assert.equal(u.available, true);
+  assert.equal(u.latest.notes, "新功能");
+  assert.equal(u.syncUrl, "https://github.com/me/robot-times");
+  await cloudUpdate(env, now + 3600e3);
+  assert.equal(calls, 1);
+  await cloudUpdate(env, now + 13 * 3600e3);
+  assert.equal(calls, 2);
+});

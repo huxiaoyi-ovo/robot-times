@@ -128,6 +128,7 @@ Zotero 弹出授权窗口时，点 **Always Allow**。
 | 检查 Zotero 和大模型是否正常 | `uv run robot-times doctor` |
 | 不要开机自动启动 | `uv run robot-times local autostart --off` |
 | 导出数据（搬到云端版用） | `uv run robot-times local export out.sql` |
+| 更新到最新版本（看板里也能一键更新） | `uv run robot-times local update` |
 
 ## 常见问题
 
@@ -182,6 +183,7 @@ cd web/app && npm install && npm test                                  # 看板
 ```
 
 - 整体设计：[docs/architecture.md](docs/architecture.md)
+- 发布新版本：[docs/dev/release.md](docs/dev/release.md)
 - 代码约定：[CLAUDE.md](CLAUDE.md)
 - 加一个新的研究方向：在 [`presets.py`](core/src/robot_times/presets.py) 里加一个预设
 

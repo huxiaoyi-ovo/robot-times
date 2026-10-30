@@ -532,6 +532,10 @@ def local_serve(
     typer.secho(f"看板：{url}（关掉这个窗口或按 Ctrl+C 停止）", fg="green")
     if api.jobs is not None:
         api.jobs.auto()
+    if api.updater is not None:
+        from .local.update import ticker
+
+        ticker(api.updater)  # 每小时检查一次新版本，开了自动更新就在没人用的时候更新
     if open_browser:
         webbrowser.open(url)
     try:
@@ -608,6 +612,33 @@ def local_restart() -> None:
             return
         time.sleep(0.5)
     _fail(f"看板没起来，看看日志：{CONFIG_DIR / 'serve.log'}")
+
+
+@local.command("update")
+def local_update(
+    check: bool = typer.Option(False, "--check", help="只检查，不更新"),
+) -> None:
+    """更新到最新发布的版本（看板开着的话会自动重启）。"""
+    from . import __version__
+    from .local.app import open_store
+    from .local.server import is_running
+    from .local.update import UpdateError, Updater, newer
+
+    up = Updater(open_store(), restart=lambda: None)
+    latest = up.check(force=True)
+    if not latest or not newer(latest["version"], __version__):
+        typer.secho(f"已经是最新版本：{__version__}", fg="green")
+        return
+    typer.echo(f"有新版本：{__version__} → {latest['version']}\n{latest['notes']}")
+    if check:
+        return
+    try:
+        up.apply(latest)
+    except UpdateError as e:
+        _fail(str(e))
+    typer.secho(f"✓ 已更新到 {latest['version']}", fg="green")
+    if is_running():
+        local_restart()
 
 
 @local.command("export")

@@ -22,6 +22,23 @@ class Store(Protocol):
     def run(self, sql: str, params: tuple | list = ()) -> None: ...
 
 
+# 数据库结构的升级：以后改表结构时往这里追加 SQL（只追加、不改旧的），本地版启动时按顺序补上没跑过的。
+# 新建的数据库由 schema.sql 直接建成最新结构，所以这里的每一条都要能在最新结构上重复执行而不出错
+# （例如加列前先查有没有）。云端 D1 的对应改动放在 web/app/migrations/。
+MIGRATIONS: list[str] = []
+
+
+def migrate(db: sqlite3.Connection, migrations: list[str] | None = None) -> int:
+    """按 pragma user_version 记录跑到第几条，返回这次跑了几条。"""
+    steps = MIGRATIONS if migrations is None else migrations
+    done = db.execute("pragma user_version").fetchone()[0]
+    for i, sql in enumerate(steps[done:], start=done + 1):
+        db.executescript(sql)
+        db.execute(f"pragma user_version = {i}")
+    db.commit()
+    return max(0, len(steps) - done)
+
+
 class SqliteStore:
     """本地 SQLite。本地版的看板服务和后台任务在不同线程里用同一个连接，所以加锁。"""
 
@@ -35,6 +52,7 @@ class SqliteStore:
             if str(path) != ":memory:":
                 self.db.execute("pragma journal_mode = wal")
             self.db.executescript(SCHEMA)
+            migrate(self.db)
 
     def rows(self, sql: str, params: tuple | list = ()) -> list[dict[str, Any]]:
         with self._lock:

@@ -14,7 +14,7 @@
 //   GITHUB_TOKEN        “立即生成”按钮用，只需本仓库 Actions 写权限（机密，可选）
 //   DEV_NO_AUTH=1       只在本地 wrangler dev 时用（写在 .dev.vars），线上不要设
 
-import { DEFAULT_PRESET, PRESETS, presetFor, styleFor } from "./presets.js";
+import { DEFAULT_PRESET, PRESETS, VERSION, presetFor, styleFor } from "./presets.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const STATUSES = new Set(["todo", "reading", "done", "skip"]);
@@ -215,6 +215,7 @@ const DEFAULT_SETTINGS = {
   tag: "Robot Times",
   zoteroCollection: "",
   diversity: 0.4,
+  autoUpdate: true,
 };
 
 async function all(env, sql, ...params) {
@@ -287,6 +288,7 @@ async function bootstrap(env, who) {
     site: siteInfo(settings),
     mode: "cloud",
     job,
+    update: await cloudUpdate(env).catch(() => null),
     features: {
       zotero: Boolean(env.ZOTERO_USER_ID && env.ZOTERO_API_KEY),
       ask: Boolean(env.DEEPSEEK_API_KEY),
@@ -402,6 +404,7 @@ async function saveSettings(env, b) {
   if (b.field !== undefined) s.field = String(b.field).trim().slice(0, 40);
   if (b.weatherCity !== undefined) s.weatherCity = String(b.weatherCity).trim().slice(0, 60);
   if (b.zoteroCollection !== undefined) s.zoteroCollection = String(b.zoteroCollection).trim().slice(0, 80);
+  if (b.autoUpdate !== undefined) s.autoUpdate = Boolean(b.autoUpdate);
   if (b.tag !== undefined) s.tag = String(b.tag).trim().slice(0, 40) || "Robot Times";
   if (b.newsFeeds !== undefined) {
     const feeds = (Array.isArray(b.newsFeeds) ? b.newsFeeds : []).map((u) => String(u).trim()).filter(Boolean);
@@ -809,6 +812,44 @@ async function ask(env, b) {
   if (resp.status === 429) throw new HttpError(503, "DeepSeek 请求太频繁，稍后再试。");
   if (!resp.ok || !resp.body) throw new HttpError(502, `DeepSeek 出错了：HTTP ${resp.status}`);
   return new Response(resp.body, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" } });
+}
+
+// ---------------- 新版本提示 ----------------
+// 云端版的代码在用户 fork 的仓库里：有新版本时提示去 GitHub 点 Sync fork，同步后 Cloudflare 会自动重新部署。
+const UPSTREAM = "huxiaoyi-ovo/robot-times"; // 项目主页，不是用户的仓库
+const newerThan = (a, b) => {
+  const p = (v) => String(v).replace(/^v/, "").split("-")[0].split(".").map((n) => parseInt(n, 10) || 0);
+  const [x, y] = [p(a), p(b)];
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+};
+
+export async function cloudUpdate(env, now = Date.now()) {
+  const row = await env.DB.prepare("select value from config where key = 'update_check'").first();
+  let c = row ? JSON.parse(row.value) : null;
+  if (!c || now - Date.parse(c.at) > 12 * 3600e3) {
+    const r = await fetch(`https://api.github.com/repos/${UPSTREAM}/releases/latest`, {
+      headers: { accept: "application/vnd.github+json", "user-agent": "robot-times" },
+    });
+    let latest = c?.latest || null;
+    if (r.ok) {
+      const d = await r.json();
+      latest = { version: String(d.tag_name || "").replace(/^v/, ""), tag: d.tag_name, notes: String(d.body || "").slice(0, 4000), url: d.html_url };
+    } else if (r.status === 404) latest = null;
+    c = { at: new Date(now).toISOString(), latest };
+    await env.DB.prepare("insert into config (key, value) values ('update_check', ?) on conflict(key) do update set value = excluded.value")
+      .bind(JSON.stringify(c))
+      .run();
+  }
+  const repo = ghRepo(env);
+  return {
+    current: VERSION,
+    latest: c.latest,
+    available: Boolean(c.latest && newerThan(c.latest.version, VERSION)),
+    method: "fork",
+    syncUrl: repo ? `https://github.com/${repo}` : null,
+    state: "idle",
+  };
 }
 
 // ---------------- 生成任务（触发 GitHub Actions） ----------------

@@ -478,7 +478,9 @@ details[open] summary{margin-bottom:10px}
 
 .jobbar{display:flex;align-items:center;gap:10px;margin:14px auto 0;padding:9px 14px;border:1px solid var(--rule);font-family:var(--sans);font-size:13.5px;color:var(--text);background:var(--paper-2)}
 .jobbar[hidden]{display:none}
-.hintbar{justify-content:space-between;flex-wrap:wrap;row-gap:6px}.hintbar .acts{display:flex;gap:8px;align-items:center}.hintbar kbd{font-family:var(--sans);font-size:12px;border:1px solid var(--rule);padding:0 5px}
+.hintbar{justify-content:space-between;flex-wrap:wrap;row-gap:6px}.hintbar .acts{display:flex;gap:8px;align-items:center}.optrow{display:flex!important;gap:8px;align-items:flex-start;font-size:14px}.optrow input{width:auto;margin-top:4px}
+.updnotes{white-space:pre-wrap;margin:6px 0 0;color:var(--mute);font-size:13px;max-height:9em;overflow:auto}
+.hintbar kbd{font-family:var(--sans);font-size:12px;border:1px solid var(--rule);padding:0 5px}
 .jobbar .dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:jobpulse 1.2s ease-in-out infinite}
 @keyframes jobpulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.jobbar .dot{animation:none}}
@@ -841,7 +843,7 @@ table.plan{font-family:var(--franklin)}
   <div class="wrap"><div class="rules"></div></div>
 </header>
 
-<div class="wrap"><div class="jobbar" id="jobbar" role="status" hidden></div><div class="jobbar hintbar" id="hintbar" hidden></div></div>
+<div class="wrap"><div class="jobbar" id="jobbar" role="status" hidden></div><div class="jobbar hintbar" id="hintbar" hidden></div><div class="jobbar hintbar" id="updbar" role="status" hidden></div></div>
 <main class="wrap" id="main"><p class="mute">正在载入…</p></main>
 
 <div id="reader-root"></div>
@@ -1311,7 +1313,58 @@ function viewCfg(){
         ${ck(f.ask,"可以问 AI","还不能问 AI：在 Cloudflare 给看板加上 DEEPSEEK_API_KEY")}
         ${ck(f.run,"可以在这里手动生成推荐","“立即生成”没开（可选）：在 Cloudflare 给看板加上 GITHUB_TOKEN")}`}
       </ul></section>
+    ${versionSection()}
   </div>`;
+}
+function versionSection(){
+  const u=S.update; if(!u) return "";
+  const latest=u.latest?.version;
+  const line = u.available ? `有新版本 <b>v${esc(latest)}</b>`+(u.latest?.url?`（<a href="${esc(u.latest.url)}" target="_blank" rel="noopener">更新内容</a>）`:"") : "已经是最新版本";
+  const act = u.available ? (u.method==="fork"
+      ? (u.syncUrl?`<a class="btn" href="${esc(u.syncUrl)}" target="_blank" rel="noopener">去 GitHub 同步</a>`:"")
+      : u.method==="none" ? `<span class="small faint">这份代码不是用安装脚本装的，请自己 git pull</span>` : `<button class="btn pri" data-upd="go">更新</button>`) : "";
+  return `<section class="section"><h2>版本</h2>
+      <p>当前 <b>v${esc(u.current)}</b>，${line}。</p>
+      ${u.method==="fork"?`<p class="small faint">云端版的代码在你 fork 的仓库里：有新版本时到 GitHub 上你的仓库页面点 <b>Sync fork</b>，Cloudflare 会自动重新部署。</p>`:""}
+      ${isLocal()?`<label class="optrow"><input type="checkbox" id="cfg-auto" ${u.auto?"checked":""}> 自动更新（有新版本时，在看板 10 分钟没人用、也没在生成推荐的时候自动更新）</label>`:""}
+      <div class="actions">${act}${isLocal()?`<button class="btn" data-upd="check">检查更新</button>`:""}</div></section>`;
+}
+
+/* 新版本提示：报头下面一条，点“以后再说”这个版本就不再提示 */
+function showUpdate(){
+  const el=$("#updbar"), u=S.update;
+  let skip=""; try{ skip=localStorage.getItem("upd-skip")||""; }catch{}
+  if(u && (u.state==="updating"||u.state==="restarting")){
+    el.innerHTML=`<span class="dot" aria-hidden="true"></span><span>正在更新到 v${esc(u.latest?.version||"")}……大约一分钟，好了页面会自动刷新。</span>`;
+    el.hidden=false; return;
+  }
+  if(u && u.state==="failed"){
+    el.innerHTML=`<span>更新没成功：${esc(u.error||"")}。现在用的还是 v${esc(u.current)}。</span><span class="acts"><button class="btn link" data-upd="close">知道了</button></span>`;
+    el.hidden=false; return;
+  }
+  if(!u || !u.available || skip===u.latest.version){ el.hidden=true; return; }
+  const go = u.method==="fork" ? (u.syncUrl?`<a class="btn" href="${esc(u.syncUrl)}" target="_blank" rel="noopener">去 GitHub 同步</a>`:"")
+    : u.method==="none" ? "" : `<button class="btn pri" data-upd="go">更新</button>`;
+  el.innerHTML=`<span style="flex:1 1 320px">有新版本 <b>v${esc(u.latest.version)}</b>（现在是 v${esc(u.current)}）${u.latest.notes?`<details><summary class="small">更新内容</summary><div class="updnotes">${esc(u.latest.notes)}</div></details>`:""}</span><span class="acts">${go}<button class="btn link" data-upd="skip">以后再说</button></span>`;
+  el.hidden=false;
+}
+let updTimer=null;
+async function startUpdate(){
+  try{ S.update=await api("/api/update",{method:"POST"}); }
+  catch(e){ toast(e.message); return; }
+  showUpdate(); watchUpdate();
+}
+function watchUpdate(){
+  if(updTimer) return;
+  const want=S.update?.latest?.version;
+  updTimer=setInterval(async()=>{
+    try{
+      const u=await api("/api/update");
+      if(u.current===want){ clearInterval(updTimer); updTimer=null; toast(`已更新到 v${want}`); setTimeout(()=>location.reload(),800); return; }
+      S.update=u; showUpdate();
+      if(u.state==="failed"){ clearInterval(updTimer); updTimer=null; }
+    }catch{ /* 看板正在重启，接着等 */ }
+  }, 3000);
 }
 
 /* ---------- 报头与整页渲染 ---------- */
@@ -1779,6 +1832,10 @@ document.addEventListener("click", e=>{
   if(d.st&&S.open){ setStatus(S.open, d.st); return; }
   if(d.flag&&S.open){ const f=new Set(noteOf(S.open).flags||[]); f.has(d.flag)?f.delete(d.flag):f.add(d.flag); patchNote(S.open,{flags:[...f]}); refreshReader(); return; }
   if(d.fb&&S.open) return sendFeedback(S.open, d.fb);
+  if(d.upd==="go") return startUpdate();
+  if(d.upd==="skip"){ try{ localStorage.setItem("upd-skip", S.update?.latest?.version||""); }catch{} return showUpdate(); }
+  if(d.upd==="close"){ $("#updbar").hidden=true; return; }
+  if(d.upd==="check"){ api("/api/update?check=1").then(u=>{ S.update=u; render(); showUpdate(); toast(u.available?`有新版本 v${u.latest.version}`:"已经是最新版本"); }).catch(e=>toast(e.message)); return; }
   if(d.run) return runJob(d.run, t);
   if(t.id==="z-add") return addZotero();
   if(t.id==="z-del") return removeZotero();
@@ -1794,6 +1851,7 @@ document.addEventListener("input", e=>{
   const t=e.target;
   if(t.id==="note-ta"&&S.open){ patchNote(S.open,{note:t.value},900); return; }
   if(t.id==="lib-q"){ S.lib.q=t.value; clearTimeout(libTimer); libTimer=setTimeout(()=>loadLib(),300); return; }
+  if(t.id==="cfg-auto"){ api("/api/config",{method:"PUT", body:JSON.stringify({autoUpdate:t.checked})}).then(s=>{ S.settings=s; if(S.update) S.update.auto=t.checked; toast(t.checked?"已打开自动更新":"已关掉自动更新"); }).catch(e=>toast(e.message)); return; }
   if(t.id==="cfg-div"){ $("#cfg-div-v").textContent=(+t.value).toFixed(1); return; }
   if(t.id?.startsWith("w-")){ const k=t.id.slice(2), w={...weights(), [k]:+t.value}; S.wDraft=w;
     $("#wv-"+k).textContent=(+t.value).toFixed(2); $("#formula").textContent=formula(w); }
@@ -1841,13 +1899,13 @@ function hideHint(){ try{ localStorage.setItem("hint-install","off"); }catch{} $
 
 async function loadAll(){
   const b=await api("/api/bootstrap");
-  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
+  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
     notes:b.notes||{}, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
     news:b.news||null, newsDates:b.newsDates||[], weather:S.weather?.live?S.weather:(b.weather||S.weather||null), site:b.site||null});
   if(b.news) S.newsCache[b.news.date]=b.news;
 }
 (async()=>{
-  try{ await loadAll(); showJob(); if(jobBusy(S.job)) watchJob(); showHint(); }
+  try{ await loadAll(); showJob(); if(jobBusy(S.job)) watchJob(); showHint(); showUpdate(); if(["updating","restarting"].includes(S.update?.state)) watchUpdate(); }
   catch(e){ S.error=e.message; }
   liveWeather();
   setInterval(()=>{ if(!document.hidden) liveWeather(true); }, 30*60e3);

@@ -102,6 +102,7 @@ def js_module() -> str:
     """
     import json
 
+    from . import __version__
     from .llm.style import TEMPLATE
 
     data = {k: {f: p[f] for f in JS_FIELDS} for k, p in PRESETS.items()}
@@ -111,6 +112,7 @@ def js_module() -> str:
         "// （Worker 主文件只能导出处理函数，所以放在单独的模块里；tests/test_prompts.py 检查两边一致）\n"
         f"export const PRESETS = {json.dumps(data, ensure_ascii=False, indent=2)};\n"
         f'export const DEFAULT_PRESET = "{DEFAULT}";\n'
+        f'export const VERSION = "{__version__}"; // 来自 core/pyproject.toml\n'
         f"const TEMPLATE = {json.dumps(TEMPLATE, ensure_ascii=False)};\n\n"
         "// 和 Python 的 get_preset 一样：按设置取预设，再套上设置里单独改过的报名和领域名\n"
         "export function presetFor(settings = {}) {\n"

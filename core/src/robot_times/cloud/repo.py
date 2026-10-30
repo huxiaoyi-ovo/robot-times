@@ -23,6 +23,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "weatherCity": "",
     "zoteroCollection": "",  # 加入 Zotero 时放进的文件夹，留空就放在“我的文库”
     "diversity": 0.4,
+    "autoUpdate": True,  # 本地版：有新版本时在没人用的时候自动更新
 }
 
 
@@ -93,6 +94,8 @@ def update_settings(s: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     ):
         if key in b:
             s[key] = str(b[key] or "").strip()[:limit]
+    if "autoUpdate" in b:
+        s["autoUpdate"] = bool(b["autoUpdate"])
     if "tag" in b:
         s["tag"] = str(b["tag"] or "").strip()[:40] or "Robot Times"
     if "newsFeeds" in b:

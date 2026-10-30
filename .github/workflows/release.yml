@@ -1,0 +1,38 @@
+# 发布新版本：先把 core/pyproject.toml 的 version 改成新版本号并推到 main，再打标签推上去：
+#   git tag v0.2.0 && git push origin v0.2.0
+# 这里会检查版本号一致、测试通过，然后建 GitHub Release（更新说明取 CHANGELOG.md 里这个版本的那一段）。
+# 用户的看板每天检查一次最新 Release，有新版本就提示更新。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: 版本号要和 core/pyproject.toml 一致
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(grep -m1 '^version' core/pyproject.toml | cut -d'"' -f2)"
+          [ "$want" = "$have" ] || { echo "标签是 $want，但 core/pyproject.toml 里是 $have"; exit 1; }
+      - run: uv sync --locked
+      - run: uv run pytest -q
+      - name: 取这个版本的更新说明
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '$0 ~ "^## \\[?v?"v"\\]?" {on=1; next} on && /^## / {exit} on {print}' CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "见提交记录。" > notes.md
+          cat notes.md
+      - name: 发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

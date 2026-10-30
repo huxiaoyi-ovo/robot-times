@@ -127,6 +127,13 @@ def build(store: SqliteStore | None = None, *, background: bool = True) -> Local
             os.environ.get("ROBOT_TIMES_LLM_MODEL") or DEEPSEEK_MODEL,
         )
     jobs = Jobs(store, make_runners(store, zotero), background=background)
+    from .update import Updater
+
+    def busy() -> bool:
+        st = jobs.status()
+        return bool(st["running"] or st["queue"])
+
+    updater = Updater(store, busy=busy)
     pdf = os.environ.get("ROBOT_TIMES_ZOTERO_PDF", "1").lower() not in ("0", "false", "no")
     return LocalApi(
         store,
@@ -134,6 +141,7 @@ def build(store: SqliteStore | None = None, *, background: bool = True) -> Local
         llm=llm_from_env(),
         llm_stream=llm_stream,
         jobs=jobs,
+        updater=updater,
         pdf=pdf,
         http=httpx.Client(timeout=60.0, follow_redirects=True),
     )

@@ -10,6 +10,7 @@ import html
 import json
 import logging
 import re
+import threading
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -174,6 +175,7 @@ class LocalApi:
         llm: LLMClient | None = None,
         llm_stream: Callable[[list[dict[str, str]]], Iterator[bytes]] | None = None,
         jobs: Any = None,  # jobs.Jobs：后台生成推荐、业界简报和周报
+        updater: Any = None,  # update.Updater：检查和执行更新
         pdf: bool = True,
         http: httpx.Client | None = None,
     ) -> None:
@@ -182,6 +184,7 @@ class LocalApi:
         self.llm = llm
         self.llm_stream = llm_stream
         self.jobs = jobs
+        self.updater = updater
         self.pdf = pdf
         self.http = http or httpx.Client(timeout=60.0, follow_redirects=True)
 
@@ -242,6 +245,19 @@ class LocalApi:
             if self.jobs is None:
                 raise ApiError(400, "这里不能生成。")
             return Reply(body=self.jobs.start(job, force=True))
+        if p == "/api/update" and m in ("GET", "POST"):
+            if self.updater is None:
+                raise ApiError(400, "这里不能更新。")
+            from .update import UpdateError
+
+            try:
+                if m == "POST":
+                    return Reply(body=self.updater.start())
+                if q.get("check"):
+                    self.updater.check(force=True)
+                return Reply(body=self.updater.status())
+            except UpdateError as e:
+                raise ApiError(400, str(e)) from None
         if m == "GET" and p == "/api/job":
             return Reply(body=self.jobs.status() if self.jobs else None)
         raise ApiError(404, "没有这个接口。")
@@ -298,12 +314,22 @@ class LocalApi:
             "weather": repo.get_json(st, "weather"),
             "site": site_info(settings),
             "job": self.jobs.status() if self.jobs else None,
+            "update": self._update_status(),
             "features": {
                 "zotero": self.zotero is not None and bool(self.zotero.api_key),
                 "ask": self.llm is not None or self.llm_stream is not None,
                 "run": self.jobs is not None,
             },
         }
+
+    def _update_status(self) -> dict[str, Any] | None:
+        """打开看板时顺便在后台查一下新版本（12 小时最多一次），不让页面等。"""
+        u = self.updater
+        if u is None:
+            return None
+        u.last_seen = u.now()
+        threading.Thread(target=u.check, daemon=True).start()
+        return u.status()
 
     def search(self, q: dict[str, str]) -> dict[str, Any]:
         text = (q.get("q") or "").strip()[:100]
