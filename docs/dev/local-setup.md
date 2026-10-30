@@ -108,24 +108,16 @@ ROBOT_TIMES_LLM_MODEL=模型名
 没设自动启动时，先运行 `uv run robot-times local serve`（终端窗口要一直开着）。今天的推荐还没生成时会在后台自动生成，看板上方显示进度，
 好了自动刷新。第一次要几分钟；业界简报和周报也会按需补上（周报在周日晚上 6 点后）。
 
-## 4. 让它每天自己跑（可选）
+## 4. 什么时候生成
 
-不想每天开看板等它生成，可以交给系统的计划任务，每天早上跑一次 `robot-times local run`
-（arXiv 在北京时间早上 8 到 9 点发布新论文，所以 9:30 左右合适）：
+看板在后台运行时（开机自动启动），每 10 分钟看一遍，到点了就自己生成，不用打开网页：
 
-- **macOS / Linux**：`crontab -e`，加一行（路径换成你的）：
+- 每日推荐：工作日北京时间 9:30 以后（arXiv 早上 8 或 9 点发布新论文，周末不发布）
+- 业界简报：每天 8 点以后
+- 本周回顾：周日晚上 6 点以后，错过了下周补上
 
-  ```cron
-  30 9 * * 1-5 cd /path/to/robot-times && /path/to/uv run robot-times local run >> ~/.robot-times/run.log 2>&1
-  ```
-
-- **Windows**：
-
-  ```powershell
-  schtasks /create /tn "The Robot Times" /sc weekly /d MON,TUE,WED,THU,FRI /st 09:30 /tr "cmd /c cd /d C:\path\to\robot-times && uv run robot-times local run"
-  ```
-
-到时间电脑要开着、Zotero 要打开（推荐要读你的文献库）。
+电脑要开着（睡眠醒来后会接着补）、Zotero 要打开（推荐要读你的文献库）：Zotero 没开时等你打开后自动接着生成。
+失败了报头下面会显示原因和“重试”按钮，3 小时后也会自动再试。
 
 ## 数据放在哪
 

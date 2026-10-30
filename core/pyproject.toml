@@ -1,6 +1,6 @@
 [project]
 name = "robot-times"
-version = "0.2.1"
+version = "0.2.2"
 description = "The Robot Times 核心库：论文抓取、打分、Zotero 本地 API 客户端，以及技术验证用的命令行工具"
 requires-python = ">=3.11"
 dependencies = [

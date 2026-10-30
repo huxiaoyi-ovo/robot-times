@@ -242,7 +242,9 @@ def test_due_jobs():
     repo.set_json(store, "local_runs", {"news": "2026-10-26T06:30:00+08:00"})
     repo.save_week(store, {"week": "2026-W43"})
     assert due(store, at("2026-10-26 08:00")) == []
+    assert due(store, at("2026-10-26 09:10")) == []  # arXiv 可能还没发布（冬令时 9 点）
     assert due(store, at("2026-10-26 10:00")) == ["daily", "news"]
+    assert due(store, at("2026-10-25 10:00")) == []  # 周日 arXiv 不发布，不生成推荐
     repo.save_day(
         store, {"date": "2026-10-26", "picks": [], "generatedAt": "2026-10-26T02:30:00+00:00"}
     )
@@ -354,3 +356,50 @@ def test_stop_shuts_down_the_dashboard(server):
 
     port = int(server.rsplit(":", 1)[1])
     assert is_running(port) and stop(port) and not is_running(port)
+
+
+def test_scheduler_generates_in_background_only_after_setup():
+    import time
+
+    from robot_times.local.jobs import scheduler
+
+    calls = []
+
+    class J:
+        def auto(self):
+            calls.append(1)
+
+    ready = {"v": False}
+    scheduler(J(), lambda: ready["v"], every=0.05, first=0)
+    time.sleep(0.2)
+    assert calls == []  # 设置引导没做完
+    ready["v"] = True
+    time.sleep(0.2)
+    assert len(calls) >= 2
+
+
+def test_zotero_closed_does_not_block_retry_for_hours():
+    from robot_times.local import diagnose
+    from robot_times.local.jobs import WaitForZotero
+
+    store = SqliteStore()
+    state = {"open": False}
+
+    def daily(force=False):
+        if not state["open"]:
+            raise WaitForZotero("连不上 Zotero：打开 Zotero 后会自动接着生成")
+        return "12 篇推荐"
+
+    jobs = Jobs(store, {"daily": daily, "news": lambda force=False: "", "weekly": lambda force=False: ""},
+                background=False, clock=lambda: at("2026-10-26 10:00"))  # fmt: skip
+    jobs.start("daily", force=False)
+    jobs.start("daily", force=False)
+    assert jobs.status()["last"]["title"] == "连不上 Zotero"
+    assert "daily" not in (repo.get_json(store, "local_runs") or {})  # 没算“试过”
+    assert "daily" in due(store, at("2026-10-26 10:10"))  # 10 分钟后定时检查还会接着试
+    assert (
+        len([h for h in diagnose.history(store) if h["kind"] == "daily"]) == 1
+    )  # 重复的失败只记一条
+    state["open"] = True
+    jobs.start("daily", force=False)
+    assert jobs.status()["last"]["ok"]

@@ -122,6 +122,9 @@ def explain(message: str, job: str | None = None) -> dict[str, Any]:
 def record(store, result: dict[str, Any]) -> None:
     """每次任务的结果都记下来（最近 20 次），体检页里能翻看。"""
     hist = repo.get_json(store, "job_history") or []
+    same = hist and all(hist[0].get(k) == result.get(k) for k in ("kind", "ok", "message"))
+    if same:  # 同样的失败一再重复（比如 Zotero 一直没开），只留最新的一条
+        hist = hist[1:]
     repo.set_json(store, "job_history", [result, *hist][:HISTORY])
 
 

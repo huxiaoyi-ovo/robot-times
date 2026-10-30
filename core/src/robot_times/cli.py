@@ -538,8 +538,10 @@ def local_serve(
     api.restart = lambda: restart_dashboard(port)  # 看板上的“重启”和更新后的重启，都回到这个端口
     if api.updater is not None:
         api.updater.restart = api.restart
-    if api.jobs is not None and api.ready():
-        api.jobs.auto()
+    if api.jobs is not None:
+        from .local.jobs import scheduler
+
+        scheduler(api.jobs, api.ready)  # 到点自动生成：工作日 9:30 推荐、8 点业界简报、周日晚上周报
     if api.updater is not None:
         from .local.update import ticker
 

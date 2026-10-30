@@ -1,7 +1,10 @@
 """本地版的后台任务：每日推荐、业界简报、周报。
 
-本地版没有定时服务器，所以打开看板时检查一遍：今天的还没生成就在后台补上，看板上显示进度。
-想让它每天自己跑，也可以把 `robot-times local run` 交给系统的计划任务（见 docs/dev/local-setup.md）。
+看板在后台运行时，每 10 分钟看一遍（scheduler）：到点了、今天的还没有，就在后台生成。
+- 每日推荐：工作日北京时间 9:30 以后（arXiv 8 点或 9 点发布新论文，周末不发布）
+- 业界简报：每天 8 点以后
+- 本周回顾：周日晚上 6 点以后；平时发现上周的还没写就补上
+打开看板时也会检查一遍。失败了 3 小时后再自动试，也可以在看板上点“重试”。
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ log = logging.getLogger("robot_times.jobs")
 
 KINDS = ("daily", "news", "weekly")
 LABELS = {"daily": "今天的推荐", "news": "业界简报", "weekly": "本周回顾"}
+NEWS_HOUR = 8  # 业界简报几点以后生成（北京时间）
 RETRY_AFTER = timedelta(hours=3)  # 失败或没有新论文时，隔多久再自动试
 
 
@@ -35,19 +39,26 @@ def due(store: Store, now: datetime | None = None) -> list[str]:
         return bool(at) and datetime.fromisoformat(at) >= t
 
     out = []
-    release = now.replace(hour=RELEASE_HOUR + 1, minute=0, second=0, microsecond=0)
+    release = now.replace(hour=RELEASE_HOUR + 1, minute=30, second=0, microsecond=0)
+    weekday = now.isoweekday() <= 5  # 周末 arXiv 不发布新论文
     has_days = bool(store.rows("select 1 from days limit 1"))
     if not has_days:  # 第一次用：马上生成一份
         if not tried_since("daily", now - RETRY_AFTER):
             out.append("daily")
     elif (
-        now >= release
+        weekday
+        and now >= release
         and not generated_after_release(store, today)
         and not tried_since("daily", max(release, now - RETRY_AFTER))
     ):
         out.append("daily")
     has_news = store.rows("select 1 from news where date = ?", [today.isoformat()])
-    if not has_news and not tried_since("news", now - RETRY_AFTER):
+    first_news = not store.rows("select 1 from news limit 1")
+    if (
+        not has_news
+        and (now.hour >= NEWS_HOUR or first_news)
+        and not tried_since("news", now - RETRY_AFTER)
+    ):
         out.append("news")
     # 周报：周日晚上 6 点后写本周的；平时发现上周的还没写，就补上
     target = weekly_target(now)
@@ -67,6 +78,10 @@ def weekly_target(now: datetime) -> date:
     if today.isoweekday() == 7:
         return today if now.astimezone(TZ).hour >= 18 else today - timedelta(days=7)
     return today - timedelta(days=today.isoweekday())
+
+
+class WaitForZotero(RuntimeError):
+    """Zotero 没开。和别的失败不同，不用等 3 小时再试：Zotero 打开后下一次定时检查就生成。"""
 
 
 class Jobs:
@@ -152,15 +167,23 @@ class Jobs:
                 self._started = self.clock().isoformat(timespec="seconds")
             log.info("开始：%s", LABELS[kind])
             result: dict[str, Any] = {"kind": kind, "ok": True, "message": ""}
+            waiting = False
             try:
                 result["message"] = self.runners[kind](force=force) or ""
+            except (
+                WaitForZotero
+            ) as e:  # Zotero 没开：不算“试过”，定时检查时 Zotero 一打开就接着生成
+                waiting = True
+                log.info("%s：%s", LABELS[kind], e)
+                result.update(ok=False, message=f"RuntimeError: {e}")
             except Exception as e:  # 一个任务失败不影响下一个
                 log.exception("%s 失败", LABELS[kind])
                 result.update(ok=False, message=f"{type(e).__name__}: {str(e)[:300]}")
             finally:
-                tried = repo.get_json(self.store, "local_runs") or {}
-                tried[kind] = self.clock().isoformat(timespec="seconds")
-                repo.set_json(self.store, "local_runs", tried)
+                if not waiting:
+                    tried = repo.get_json(self.store, "local_runs") or {}
+                    tried[kind] = self.clock().isoformat(timespec="seconds")
+                    repo.set_json(self.store, "local_runs", tried)
             result["at"] = self.clock().isoformat(timespec="seconds")
             if not result["ok"]:  # 看板上显示原因和办法
                 from .diagnose import explain
@@ -175,3 +198,25 @@ class Jobs:
             with self._lock:
                 self._last = result
             log.info("完成：%s %s", LABELS[kind], result["message"])
+
+
+def scheduler(
+    jobs: Jobs, ready: Callable[[], bool], every: float = 600.0, first: float = 20.0
+) -> threading.Thread:
+    """后台线程：每 10 分钟看一遍该生成什么（电脑睡眠醒来后也会接着跑）。设置引导没做完时不生成。"""
+
+    def loop() -> None:
+        import time
+
+        time.sleep(first)
+        while True:
+            try:
+                if ready():
+                    jobs.auto()
+            except Exception:
+                log.exception("定时检查出错")
+            time.sleep(every)
+
+    t = threading.Thread(target=loop, name="robot-times-schedule", daemon=True)
+    t.start()
+    return t

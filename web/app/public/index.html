@@ -1118,7 +1118,7 @@ function planRail(secs){
 function viewToday(){
   if(!S.days.length) return emptyBox("今天的早报还没出",
     (isLocal()
-      ? `打开看板时自动生成：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 ${S.settings?.dailyMinutes||60} 分钟的阅读计划。第一次要几分钟（要下载向量模型），生成好会自动显示。`
+      ? `电脑开着时，工作日上午 9:30 以后自动生成（不用打开这个页面）：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 ${S.settings?.dailyMinutes||60} 分钟的阅读计划。第一次要几分钟（要下载向量模型），生成好会自动显示。`
       : `工作日上午 9:40 左右（北京时间）自动生成：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 ${S.settings?.dailyMinutes||60} 分钟的阅读计划。`
         + (S.features.run?"":" 第一次可以去 GitHub 仓库的 Actions → daily → Run workflow 手动生成。")))
     + (S.features.run?`<div class="actions" style="margin-top:12px">${runBtn("daily","现在生成今天的推荐")}</div>`:"");
@@ -1202,7 +1202,7 @@ async function loadNews(date){
   const d=await api(`/api/news/${date}`); S.newsCache[date]=d; return d;
 }
 function viewNews(){
-  if(!S.newsDates.length) return emptyBox("还没有业界简报",(isLocal()?"打开看板时自动生成：":"每天早上 8:20 左右（北京时间）自动生成：")+"从和你方向有关的行业媒体、公司博客、AIHOT、Hacker News，以及 Substack 等深度文章里挑出今天值得看的，配中文标题和摘要。"+(isLocal()?"":"第一次可以去 GitHub 仓库的 Actions → news → Run workflow 手动生成。"));
+  if(!S.newsDates.length) return emptyBox("还没有业界简报",(isLocal()?"电脑开着时每天早上 8 点以后自动生成：":"每天早上 8:20 左右（北京时间）自动生成：")+"从和你方向有关的行业媒体、公司博客、AIHOT、Hacker News，以及 Substack 等深度文章里挑出今天值得看的，配中文标题和摘要。"+(isLocal()?"":"第一次可以去 GitHub 仓库的 Actions → news → Run workflow 手动生成。"));
   const date=S.newsDates[Math.min(S.newsIdx,S.newsDates.length-1)];
   const n=S.newsCache[date];
   if(!n){ loadNews(date).then(()=>{ if(S.tab==="news") render(); }).catch(e=>toast(e)); return `<p class="mute">载入中…</p>`; }
@@ -1246,7 +1246,7 @@ function viewNews(){
 
 /* ---------- 本周 ---------- */
 function viewWeek(){
-  if(!S.weeks.length) return emptyBox("还没有周报",(isLocal()?"每周日晚上 6 点后打开看板时自动生成（错过了会在下周补上）：":"每周日晚上 8 点左右（北京时间）自动生成：")+"这一周你的方向发生了什么、你读了哪些、下周每天读什么。")
+  if(!S.weeks.length) return emptyBox("还没有周报",(isLocal()?"每周日晚上 6 点后自动生成（错过了会在下周补上）：":"每周日晚上 8 点左右（北京时间）自动生成：")+"这一周你的方向发生了什么、你读了哪些、下周每天读什么。")
     + (S.features.run?`<div class="actions" style="margin-top:12px">${runBtn("weekly","现在生成本周回顾")}</div>`:"");
   const w=S.weeks[Math.min(S.weekIdx,S.weeks.length-1)];
   const picks=(w.picks||[]).map(id=>S.papers[id]).filter(Boolean).sort(byScore);

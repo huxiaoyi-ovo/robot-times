@@ -116,7 +116,7 @@ Windows：[下载代码](https://github.com/huxiaoyi-ovo/robot-times/archive/ref
 | | 本地版 | 云端版 |
 | --- | --- | --- |
 | 需要什么 | 只要 Zotero 10+ | GitHub、Cloudflare、Zotero 账号密钥 |
-| 什么时候生成 | 开机后自动，打开看板时缺了就补 | 每天早上自动 |
+| 什么时候生成 | 电脑开着就每天早上自动（工作日 9:30） | 每天早上自动 |
 | 在哪看 | 这台电脑的浏览器 | 任何设备，手机可以加到主屏幕 |
 | 加入 Zotero | 直接写进本机 Zotero，PDF 一起存进去 | 写进 zotero.org，同步到电脑 |
 

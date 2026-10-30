@@ -75,7 +75,9 @@ def make_runners(store, zotero: ZoteroLocalClient, max_results: int = 800) -> di
         from ..sources.arxiv_source import fetch_recent
 
         if not zotero.ping():
-            raise RuntimeError("连不上 Zotero：请先打开 Zotero，再在看板上点“现在生成”。")
+            from .jobs import WaitForZotero
+
+            raise WaitForZotero("连不上 Zotero：打开 Zotero 后会自动接着生成，也可以点“重试”。")
         deps = DailyDeps(
             store=store,
             zotero=zotero,

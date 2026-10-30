@@ -191,7 +191,11 @@ def test_auto_update_only_when_idle_and_no_job_running(tmp_path):
     def tick_and_wait():
         u.tick()
         for th in __import__("threading").enumerate():
-            if th is not __import__("threading").current_thread() and th.daemon:
+            if (
+                th is not __import__("threading").current_thread()
+                and th.daemon
+                and th.name != "robot-times-schedule"  # 别的测试留下的定时线程
+            ):
                 th.join(timeout=2)
 
     tick_and_wait()

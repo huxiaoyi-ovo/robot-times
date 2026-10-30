@@ -24,7 +24,7 @@ arXiv 新论文（API，被限流时改用 RSS）
 | --- | --- | --- |
 | 数据 | 本机 SQLite（`~/.robot-times/robot-times.db`） | Cloudflare D1（同一套表，见 `core/src/robot_times/cloud/schema.sql`） |
 | 看板接口 | `core/src/robot_times/local/`：标准库 HTTP 服务，只监听本机 | `web/app/src/index.js`：Cloudflare Worker，用 Cloudflare Access 登录 |
-| 什么时候生成 | 开机自启的看板发现今天的还没有，就在后台生成（`local/jobs.py`） | Worker 每 30 分钟和打开看板时检查，缺了就触发 GitHub Actions（`daily.yml` 等）；GitHub 自带的定时任务兜底 |
+| 什么时候生成 | 开机自启的看板每 10 分钟检查一次，到点了、今天的还没有，就在后台生成（`local/jobs.py` 的 `scheduler`） | Worker 每 30 分钟和打开看板时检查，缺了就触发 GitHub Actions（`daily.yml` 等）；GitHub 自带的定时任务兜底 |
 | 读文献库、加入 Zotero | Zotero 桌面端的本地接口（`localhost:23119`，Zotero 10+），PDF 直接存进本机 | Zotero Web API，经 Zotero 同步到电脑 |
 | 大模型 | 自己的密钥，写在 `~/.robot-times/.env` | 自己的密钥，填在 GitHub 和 Cloudflare 的 Secrets 里 |
 
