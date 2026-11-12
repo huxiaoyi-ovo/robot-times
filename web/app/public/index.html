@@ -197,7 +197,7 @@ main{padding:22px 0 80px}
 .brief .t{font-family:var(--serif);font-weight:600;font-size:16px;line-height:1.3;color:var(--ink)}
 .brief .why{font-size:13px;line-height:1.55;color:var(--mute);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .brief .row2{display:flex;align-items:center;gap:10px;margin-top:6px}
-.brief .row2 .score{margin-left:auto}
+.brief .row2 .x{margin-left:auto}
 .brief .check{width:18px;height:18px;margin-top:0}
 .brief.skipped .t{text-decoration:line-through;text-decoration-thickness:1px;color:var(--faint)}
 .x{border:0;background:none;color:var(--faint);cursor:pointer;font-size:12.5px;padding:0;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px}
@@ -987,6 +987,14 @@ function checkBtn(id){
   const st=statusOf(id);
   return `<button class="check${st==="reading"?" half":""}" data-toggle="${esc(id)}" aria-pressed="${st==="done"}" title="${st==="done"?"已读，点一下改回待读":"标为已读"}" aria-label="标为已读">${CHECK_SVG}</button>`;
 }
+/* 截到 n 字以内：尽量停在句末，英文不截断单词，截了就加省略号 */
+function clip(t, n){
+  t=String(t||"").trim(); if(t.length<=n) return t;
+  const cut=t.slice(0,n), end=Math.max(...[..."。！？.!?"].map(c=>cut.lastIndexOf(c)));
+  return end>n*0.5 ? cut.slice(0,end+1) : cut.replace(/\s+\S*$/,"")+"…";
+}
+/* 导语：大模型写的中文摘要；没有（精排失败）才用英文摘要。列表接口不带 abstractZh */
+const ledeOf = (p, n) => p.summary || clip(p.abstract, n);
 const zhSub = p => p.titleZh ? `<p class="zh-sub">${esc(p.titleZh)}</p>` : "";
 const titleBtn = (p, cls="") => `<button class="hit ${cls}" data-open="${esc(p.id)}"><span class="ul">${esc(p.title)}</span></button>`;
 function emptyBox(title, body, err){ return `<div class="empty${err?" err":""}"><strong>${title}</strong>${body?`<span>${body}</span>`:""}</div>`; }
@@ -1027,7 +1035,7 @@ function leadStory(p, sec, noteSec){
     ${zhSub(p)}
     ${meta(p)}
     ${p.cover?`<figure class="lead-fig"><button class="img" data-open="${esc(p.id)}" aria-label="打开这篇论文"><img src="${esc(p.cover.src)}" alt="${esc(p.cover.label||"")}" decoding="async" onerror="this.closest('figure').remove()"></button><figcaption>${esc(p.cover.label||"")}${p.cover.caption?`　${esc(p.cover.caption.slice(0,160))}${p.cover.caption.length>160?"…":""}`:""}<span class="credit">图：论文原图，来自 arXiv</span></figcaption></figure>`:""}
-    <p class="lede">${esc(p.summary||(p.abstract||"").slice(0,420))}</p>
+    <p class="lede">${esc(ledeOf(p,420))}</p>
     ${p.why?`<blockquote class="pull"><small>为什么推荐给你</small>${esc(p.why)}</blockquote>`:""}
     ${p.tip?`<p class="howto"><b>怎么读</b>${esc(p.tip)}</p>`:""}
     <div class="lead-foot">
@@ -1035,7 +1043,6 @@ function leadStory(p, sec, noteSec){
       ${st==="done"?"":`<button class="btn" data-setst="${esc(p.id)}" data-v="${st==="reading"?"done":"reading"}">${st==="reading"?"读完了":"开始读"}</button>`}
       <button class="btn" data-open="${esc(p.id)}" data-focus="note">${hasNote?"看笔记":"写笔记"}</button>
       ${S.zotero[p.id]||!S.features.zotero?"":`<button class="btn link" data-zadd="${esc(p.id)}">加入 Zotero</button>`}
-      ${scoreEl(p)}
     </div>
   </article>`;
 }
@@ -1043,7 +1050,7 @@ function storyBlock(p){
   return `<article class="story${isRead(p.id)?" read":""}">
     ${p.cover?`<button class="thumb" data-open="${esc(p.id)}" tabindex="-1" aria-hidden="true"><img src="${esc(p.cover.src)}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.remove()"></button>`:""}
     <div class="story-h">${checkBtn(p.id)}<div><h4>${titleBtn(p)}${stamps(p.id)}</h4>${zhSub(p)}</div></div>
-    <div class="story-meta">${meta(p)}${scoreEl(p)}</div>
+    <div class="story-meta">${meta(p)}</div>
     ${p.summary?`<p class="sum">${esc(p.summary)}</p>`:""}
     ${p.why?`<p class="why">${esc(p.why)}</p>`:""}
   </article>`;
@@ -1053,11 +1060,10 @@ function briefItem(p, opts={}){
   return `<li class="brief${isRead(p.id)?" read":""}${st==="skip"?" skipped":""}">
     <span class="n" aria-hidden="true"></span>
     <div>
-      ${p.topic?`<p class="tk">${esc(p.topic)}</p>`:""}<div class="t">${titleBtn(p)}</div>${zhSub(p)}
+      ${p.topic&&p.topic!=="其他"?`<p class="tk">${esc(p.topic)}</p>`:""}<div class="t">${titleBtn(p)}</div>${zhSub(p)}
       <p class="why">${esc(p.why||p.summary||"")}</p>
       <div class="row2">${checkBtn(p.id)}
-        ${opts.noSkip?"":st==="skip"?`<button class="x" data-unskip="${esc(p.id)}">撤销跳过</button>`:`<button class="x" data-skip="${esc(p.id)}" title="跳过，并少推这类论文">不相关</button>`}
-        ${scoreEl(p)}</div>
+        ${opts.noSkip?"":st==="skip"?`<button class="x" data-unskip="${esc(p.id)}">撤销跳过</button>`:`<button class="x" data-skip="${esc(p.id)}" title="跳过，并少推这类论文">× 不相关</button>`}</div>
     </div>
   </li>`;
 }
@@ -1077,8 +1083,8 @@ function pkgLead(p, sec, noteSec){
       <h2 class="hl">${titleBtn(p)}</h2>
       ${stamps(p.id)?`<p class="stamps">${stamps(p.id)}</p>`:""}
       ${zhSub(p)}
-      <p class="psum">${esc(p.summary||(p.abstract||"").slice(0,320))}</p>
-      ${mline(`精读 ${minutes} 分钟`, `综合 ${total(p).toFixed(1)}`, esc(venueText(p.venue)))}
+      <p class="psum">${esc(ledeOf(p,320))}</p>
+      ${mline(`精读 ${minutes} 分钟`, esc(venueText(p.venue)))}
       ${fig?"":rel}
       <div class="acts">
         ${p.pdf?`<a class="btn pri" href="${esc(p.pdf)}" target="_blank" rel="noopener">打开 PDF</a>`:""}
@@ -1096,7 +1102,7 @@ function pkgItem(p, mode){
       <h3 class="ht">${titleBtn(p)}</h3>
       ${zhSub(p)}
       ${p.summary?`<p class="isum">${esc(p.summary)}</p>`:""}
-      <div class="pi-foot">${checkBtn(p.id)}${mline(`${MODES[mode]?.name||"看摘要"} ${MIN_OF[p.tier]||5} 分钟`, `综合 ${total(p).toFixed(1)}`)}${stamps(p.id)}</div>
+      <div class="pi-foot">${checkBtn(p.id)}${mline(`${MODES[mode]?.name||"看摘要"} ${MIN_OF[p.tier]||5} 分钟`)}${stamps(p.id)}</div>
     </div>
     ${coverBtn(p,"pthumb",true)}
   </article>`;
@@ -1179,8 +1185,8 @@ function newsItem(it, opts={}){
 function industryBand(part){
   const n=S.news; if(!n||(!n.news?.length&&!n.deep?.length)) return "";
   const news=n.news||[], deeps=n.deep||[];
-  const withImg=news.find(it=>it.image);
   const lead=news[0], rest=news.slice(1);
+  const withImg=lead?.image ? lead : null;  // 只配头条自己的图：拿别条新闻的图会图文不符
   const side=rest.slice(0,3), row=rest.slice(3,6);
   const src=it=>`${esc(it.source||"")}${it.published?`　${esc(ago(it.published))}`:""}`;
   const head=(it,cls="ht")=>`<a class="${cls} hit" href="${esc(it.url)}" target="_blank" rel="noopener"><span class="ul">${esc(it.titleZh||it.title)}</span></a>`;
