@@ -454,7 +454,9 @@ export function paperToItem(p, tag) {
 export function noteHtml(p, myNote) {
   const parts = ["<h2>The Robot Times 摘要</h2>"];
   if (p.titleZh) parts.push(`<p><b>${esc(p.titleZh)}</b></p>`);
-  if (p.analysis?.review) parts.push(`<p><b>解读：</b>${esc(p.analysis.review)}</p>`);
+  // 解读分了段（做了什么 / 判断 / 对你）：每段一个 <p>，不然换行在笔记里会被吞掉；和 core 的 note_html 一致
+  const review = String(p.analysis?.review || "").split("\n").map((x) => x.trim()).filter(Boolean);
+  if (review.length) parts.push(`<p><b>解读：</b>${esc(review[0])}</p>` + review.slice(1).map((x) => `<p>${esc(x)}</p>`).join(""));
   if (p.summary) parts.push(`<p>${esc(p.summary)}</p>`);
   if (p.why) parts.push(`<p><b>为什么推荐：</b>${esc(p.why)}</p>`);
   if (p.tip) parts.push(`<p><b>怎么读：</b>${esc(p.tip)}</p>`);
