@@ -59,6 +59,9 @@ wscript "%LOCALAPPDATA%\Programs\The Robot Times\launch.vbs" open    # Windows
 curl -s --noproxy localhost http://localhost:8765/api/job
 ```
 
+一直返回 `preparing` 时，用 `curl -s --noproxy localhost http://localhost:8765/status` 看准备页面的状态：
+`failed` 为 true 就是已经失败了（不是还在准备），`status`、`hint`、`log` 里有原因和日志，照着处理后重新打开应用。
+
 以后开机会自动在后台启动，有新版本自己更新，不需要再管。
 
 ## 4. 设置（和网页上的设置引导是同一套接口）

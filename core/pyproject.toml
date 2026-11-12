@@ -7,7 +7,7 @@ dependencies = [
     "arxiv>=2.1",
     "beautifulsoup4>=4.12",
     "feedparser>=6.0.11",
-    "httpx>=0.27",
+    "httpx[socks]>=0.27",  # 终端里开了 ALL_PROXY=socks5://… 时，httpx 没有 socksio 一建客户端就报错
     "json-repair>=0.30",
     "numpy>=1.26",
     "python-dotenv>=1.0",

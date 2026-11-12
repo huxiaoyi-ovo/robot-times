@@ -84,3 +84,9 @@ def test_save_load_and_evaluate(tmp_path):
     assert result.total == 6
     assert result.picked == 2
     assert result.hits_at[5] == 2
+
+
+def test_httpx_client_builds_under_socks_proxy_env(monkeypatch):
+    # 用户终端里常开着 ALL_PROXY=socks5h://…（Clash 等），httpx 建客户端时就会读到；缺 socksio 时看板一启动就崩
+    monkeypatch.setenv("ALL_PROXY", "socks5h://127.0.0.1:7890")
+    httpx.Client().close()
