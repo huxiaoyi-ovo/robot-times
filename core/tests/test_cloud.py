@@ -473,3 +473,15 @@ def test_generated_after_release():
         store, {"date": "2026-10-26", "generatedAt": "2026-10-26T01:45:00+00:00"}
     )  # 北京 09:45
     assert generated_after_release(store, d)
+
+
+def test_daily_warns_when_fetch_hits_the_limit(monkeypatch):
+    # 抓到上限说明更早几天的论文没进候选，要在看板上说出来，不能悄悄截断
+    from robot_times.cloud import daily as daily_mod
+
+    monkeypatch.setattr(daily_mod, "FETCH_LIMIT", 3)
+    day = run_daily(deps(SqliteStore())[0], SETTINGS, MONDAY)
+    assert any("抓到上限 3 篇" in p for p in day["stats"]["problems"])
+    assert not run_daily(deps(SqliteStore(), papers=candidates()[:2])[0], SETTINGS, MONDAY)[
+        "stats"
+    ]["problems"]

@@ -16,7 +16,7 @@ from .ranking.embedder import Embedder
 from .ranking.relevance import combine, raw_relevance, recency_weights, to_ten_point
 from .zotero.local_api import item_text
 
-LLM_CANDIDATES = 60  # 只把向量粗筛后的前 60 篇交给 LLM（要给多样性留出别的方向的候选），控制成本
+LLM_CANDIDATES = 100  # 只把向量粗筛后的前 100 篇交给 LLM（要给多样性留出别的方向的候选），控制成本
 
 
 def _parse_added(item: dict[str, Any]) -> datetime | None:
@@ -93,6 +93,11 @@ def recommend(
         for sp, row in zip(top, sims, strict=True):
             sp.related = [lib_titles[j] for j in np.argsort(-row)[:2] if lib_titles[j]]
         rerank(llm, top, interests, errors=llm_errors, preset=preset)
+        # 只从大模型审过的里面选：没审过的还用向量百分位分（前 100 名都在 9 分上下），
+        # 会把大模型老实打了 5 分的论文挤下去，等于“被审过反而吃亏”。审过的不够（有批次失败）时照旧全部参与
+        judged = [sp for sp in top if sp.llm_score is not None]
+        if judged and len(judged) >= (limit or 1):
+            scored = judged
 
     scored.sort(key=lambda sp: total_score(sp, weights), reverse=True)
     if limit is not None:
