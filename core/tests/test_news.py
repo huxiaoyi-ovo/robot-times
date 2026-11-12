@@ -198,3 +198,33 @@ def test_preset_picks_news_sources_and_categories():
     items = [{"id": "1", "title": "OpenAI ships a new model", "excerpt": "", "source": "x"}]
     out = judge(None, items, "news", "", [], general)
     assert out[0]["category"] in general["news_categories"] and out[0]["score"] == 6.0
+
+
+def test_merge_events_keeps_first_report_of_each_event():
+    # 标题去重挡不住同一件事的不同侧面：大模型分组后每组只留排在最前（最重要）的一条
+    from robot_times.news.digest import merge_events
+
+    class GroupLLM:
+        def complete(self, prompt, **kw):
+            assert "[2] Anthropic 拟募资 904 亿" in prompt
+            return json.dumps({"groups": [[0, 2, 3], [9, 1]]})  # 越界的序号忽略
+
+    items = [
+        {"titleZh": t}
+        for t in (
+            "Anthropic 启动 IPO",
+            "Figure 融资",
+            "Anthropic 拟募资 904 亿",
+            "Anthropic 联创套现",
+        )
+    ]
+    out = merge_events(GroupLLM(), items, errors := [])
+    assert [it["titleZh"] for it in out] == ["Anthropic 启动 IPO", "Figure 融资"]
+    assert not errors
+
+    class Broken:
+        def complete(self, prompt, **kw):
+            return "不是 JSON"
+
+    assert merge_events(Broken(), items, errors) == items  # 合并失败就照原样放
+    assert errors and "合并同一事件失败" in errors[0]
