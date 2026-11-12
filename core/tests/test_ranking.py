@@ -124,3 +124,25 @@ def test_llm_judged_papers_are_not_pushed_out_by_unjudged(monkeypatch):
     out = recommend(cands, LIBRARY, HashingEmbedder(), llm=llm, limit=2, now=NOW)
     assert len(out) == 2
     assert all(sp.llm_score is not None for sp in out)
+
+
+def test_default_embedder_falls_back_in_order(monkeypatch):
+    # 装了 sentence-transformers 用它；没装用 fastembed；模型加载失败（比如下载不了）退回词袋，当天照样出推荐
+    import warnings
+
+    from robot_times.ranking import embedder as emb
+
+    def missing(name):
+        raise ImportError(name)
+
+    def offline(name):
+        raise OSError("连不上 Hugging Face")
+
+    monkeypatch.setattr(emb, "SentenceTransformerEmbedder", missing)
+    monkeypatch.setattr(emb, "FastEmbedEmbedder", lambda name: HashingEmbedder(dim=8))
+    assert emb.default_embedder().dim == 8
+    monkeypatch.setattr(emb, "FastEmbedEmbedder", offline)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        assert isinstance(emb.default_embedder(), HashingEmbedder)
+    assert "连不上" in str(w[0].message)

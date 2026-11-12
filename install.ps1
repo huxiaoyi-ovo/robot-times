@@ -36,7 +36,7 @@ $extra = @()
 uv run --no-sync python -c "import sentence_transformers" 2>$null
 if ($LASTEXITCODE -eq 0) { $extra = @("--extra", "embed") }
 else {
-  $ans = Read-Host "  要装更准的向量模型吗？推荐更准，但要下载 1–2 GB（PyTorch）。[y/N]"
+  $ans = Read-Host "  要改用 PyTorch 版的向量模型吗？默认的轻量版已经够用，这个要多下载 1–2 GB。[y/N]"
   if ($ans -match "^[yY]") { $extra = @("--extra", "embed") }
 }
 uv sync --frozen @extra

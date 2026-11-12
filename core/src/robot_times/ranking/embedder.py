@@ -1,4 +1,5 @@
-"""文本向量。默认用本地小模型（sentence-transformers），没装时退回到词袋哈希向量。
+"""文本向量。默认用本地小模型：装了 sentence-transformers 用它，否则用 fastembed（ONNX，不装 PyTorch）；
+都用不了时退回到词袋哈希向量。
 
 所有向量都做 L2 归一化，所以点积就是余弦相似度。
 """
@@ -65,15 +66,33 @@ class SentenceTransformerEmbedder:
         return _normalize(np.asarray(vecs, dtype=np.float32))
 
 
+class FastEmbedEmbedder:
+    """同一个 bge 模型的 ONNX 版：依赖小（不装 PyTorch），安装包默认用它。"""
+
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5") -> None:
+        from fastembed import TextEmbedding
+
+        from ..config import CONFIG_DIR
+
+        self.name = model_name
+        # 默认缓存在系统临时目录，重启就清空、每天重新下载：放进数据目录
+        self._model = TextEmbedding(model_name, cache_dir=str(CONFIG_DIR / "models"))
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        if not texts:  # 文献库为空时也要是 (0, 维数)，后面要做矩阵乘
+            return np.zeros((0, self._model.embedding_size), dtype=np.float32)
+        vecs = list(self._model.embed(texts, batch_size=64))
+        return _normalize(np.asarray(vecs, dtype=np.float32))
+
+
 def default_embedder(model_name: str = "BAAI/bge-small-en-v1.5") -> Embedder:
-    try:
-        return SentenceTransformerEmbedder(model_name)
-    except ImportError:
-        warnings.warn(
-            "没有安装 sentence-transformers，改用词袋向量，推荐质量会差一些。"
-            "安装：uv sync --extra embed",
-            stacklevel=2,
-        )
-    except Exception as e:  # 模型下载失败等：当天照样出推荐，只是质量差一些
-        warnings.warn(f"向量模型加载失败（{e}），改用词袋向量。", stacklevel=2)
+    for cls in (SentenceTransformerEmbedder, FastEmbedEmbedder):
+        try:
+            return cls(model_name)
+        except ImportError:
+            continue
+        except Exception as e:  # 模型下载失败等：当天照样出推荐，只是质量差一些
+            warnings.warn(f"向量模型加载失败（{e}），改用词袋向量。", stacklevel=2)
+            return HashingEmbedder()
+    warnings.warn("没有可用的向量模型，改用词袋向量，推荐质量会差一些。", stacklevel=2)
     return HashingEmbedder()

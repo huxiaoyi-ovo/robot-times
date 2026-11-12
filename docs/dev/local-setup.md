@@ -56,7 +56,7 @@ Zotero 弹窗时点 Always Allow，最后设成开机自动启动并打开看板
 
    ```bash
    git clone https://github.com/huxiaoyi-ovo/robot-times.git robot-times && cd robot-times
-   uv sync                  # 想要更准的推荐：uv sync --extra embed（会装 PyTorch，体积较大）
+   uv sync                  # 默认用轻量向量模型（fastembed）；uv sync --extra embed 改用 PyTorch 版（体积较大）
    ```
 
 ## 2. 初始化

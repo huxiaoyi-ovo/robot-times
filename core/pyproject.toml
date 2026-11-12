@@ -7,6 +7,7 @@ dependencies = [
     "arxiv>=2.1",
     "beautifulsoup4>=4.12",
     "feedparser>=6.0.11",
+    "fastembed>=0.4",  # 默认的语义向量模型（ONNX，不装 PyTorch）；装了 sentence-transformers 时优先用它
     "httpx>=0.27",
     "json-repair>=0.30",
     "numpy>=1.26",
