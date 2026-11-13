@@ -12,12 +12,12 @@ Picks the arXiv papers worth your time each day, writes a short review of each, 
 
 </div>
 
-> The interface and the generated summaries are currently in Chinese.
+Everything comes in English or Chinese: pick the language in the setup guide or in Settings.
 
 ## What it does
 
 - **Picks papers**: learns your interests from your Zotero library and a short description, and selects a dozen papers from each day's arXiv release.
-- **Reviews them**: a translated title and abstract for every pick; for the key papers it reads the full text and writes a short critical review with the main figures.
+- **Reviews them**: a short gist and why it matters to you for every pick; for the key papers it reads the full text and writes a short critical review with the main figures.
 - **Plans your reading**: one paper to read closely, a few abstracts, titles to skim — sized to the time you have each day.
 - **Adds to Zotero**: one click files the paper into a collection you choose, with the PDF and a summary note.
 - **Learns from you**: "more like this", "less like this", adding to Zotero and marking as read all shape future picks.
@@ -38,19 +38,23 @@ Runs on your own computer; your data stays local. No terminal needed. About 5 mi
    The installers are unsigned: on Windows click *More info → Run anyway*; on macOS allow it in *System Settings → Privacy & Security*.
 3. **Set up in the browser**: <http://localhost:8765> opens by itself (the first start downloads dependencies, about a minute)
    and walks you through connecting Zotero (click **Always Allow**), your research interests, and an optional LLM key.
+   Use the 中文 / English switch at the top of the guide to pick the language.
    The dashboard starts at login from then on and updates itself.
 
 Prefer the command line? `curl -LsSf https://raw.githubusercontent.com/huxiaoyi-ovo/robot-times/main/install.sh | bash`
 (Windows: `install.ps1` in the downloaded code).
 
-**LLM key** (optional, recommended): without it you get English abstracts only. With it you get translations, reviews, better ranking and "ask AI".
+**LLM key** (optional, recommended): without it you get the original abstracts only. With it you get gists, full-text reviews, better ranking and "ask AI".
 DeepSeek is the default (a few cents a day); any OpenAI-compatible endpoint works, including Ollama. The key stays in `~/.robot-times/.env`.
 
 **Other ways to install**: ask a coding agent (Claude Code, Codex…) to "set up The Robot Times" — the bundled
 [setup skill](.claude/skills/robot-times-setup/SKILL.md) guides it. Or run the **cloud version** (GitHub Actions + Cloudflare, free tiers, readable on your phone):
-see [docs/dev/cloud-setup.md](docs/dev/cloud-setup.md).
+see [docs/dev/cloud-setup.md](docs/dev/cloud-setup.md) (in Chinese; switch the dashboard to English under Settings → Language).
 
 ## Daily use
+
+Times are tied to arXiv's schedule: new picks are generated on weekdays after arXiv's daily release
+(9:30 Beijing time, which is the previous evening in the Americas), the industry brief every day, and the weekly review on Sunday.
 
 1. Open the dashboard in the morning: today's plan is ready.
 2. Open a paper for the summary, review and figures; click **Add to Zotero** if it is useful.

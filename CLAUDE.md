@@ -6,7 +6,12 @@ The Robot Times：帮研究生每天从 arXiv 和社区热度里筛出该读的�
 ## 约定
 
 - Python 用 uv workspace（`core/`）；看板是 `web/app/`（Cloudflare Worker，测试 `npm test`）。命令：`uv run pytest`、`uv run ruff check .`、`uv run ruff format .`。提交前三项都要通过。
-- 面向用户的文案用中文，写法直白；代码注释可以中文。
+- 面向用户的文案中英文都要有（设置里的 lang），写法直白；代码注释可以中文。
+  - Python：`i18n.L("中文", "English")`，按当前语言选（本地看板按请求的 X-Lang，后台任务按设置）。
+  - 页面 `index.html`：`t("中文")`，英文写进同一文件里的 `EN` 表；占位写成 `{n}`。
+  - Worker `index.js`：`L("中文", "English")`；Zotero 笔记、问 AI 按设置里的 lang。
+  - 生成内容的提示词（精排、解读、早报导语、周报、业界简报、问 AI）各有英文版，方向预设的英文字段在 `presets.py` 的 `PRESETS_EN`。
+  - `tests/test_i18n.py` 检查英文路径里不混进中文。
 - 外部服务（Zotero、arXiv、LLM）在测试里一律用 `httpx.MockTransport` 或假对象，测试不能联网。
 - arXiv API 每 3 秒最多 1 次请求；arXiv 的 PDF 不要转存到我们的服务器。
 - 隐私边界：云端只存兴趣画像和论文 ID，PDF 和笔记不离开用户电脑。

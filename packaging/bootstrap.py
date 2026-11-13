@@ -228,28 +228,43 @@ button{font:inherit;font-size:14px;padding:7px 16px;border:1px solid var(--ink);
 button.alt{background:none;color:var(--ink)}a{color:var(--ink)}</style>
 <h1>The Robot Times</h1>
 <div id="ok"><p><span class="dot"></span><span id="s">{status}</span></p>
-<p>第一次打开要下载 Python 和依赖，大约一分钟。好了这个页面会自动变成设置引导，不用做别的。</p></div>
+<p data-t>第一次打开要下载 Python 和依赖，大约一分钟。好了这个页面会自动变成设置引导，不用做别的。</p></div>
 <div id="fail"><p><b id="ft"></b></p><p id="fh"></p>
-<p><button id="retry">重试</button><button class="alt" id="copy">复制日志</button>
-<a href="https://github.com/huxiaoyi-ovo/robot-times/issues/new" target="_blank" rel="noopener">报告问题</a></p>
-<p style="font-size:13px">日志（<span id="fp"></span>）：</p><pre id="log"></pre></div>
+<p><button id="retry" data-t>重试</button><button class="alt" id="copy" data-t>复制日志</button>
+<a href="https://github.com/huxiaoyi-ovo/robot-times/issues/new" target="_blank" rel="noopener" data-t>报告问题</a></p>
+<p style="font-size:13px"><span data-t>日志</span>（<span id="fp"></span>）：</p><pre id="log"></pre></div>
 <script>
 // 准备页面和看板用同一个端口：准备页面没有 /api/job，看板有。看板起来了就刷新；中间连不上也继续等。
 const $ = (i) => document.getElementById(i);
+// 这时候还没有设置：浏览器不是中文就显示英文（状态和报错从下面的表里翻，表里没有的原样显示）
+const EN = !/^zh/i.test(navigator.language || "") && {
+  "第一次打开要下载 Python 和依赖，大约一分钟。好了这个页面会自动变成设置引导，不用做别的。": "The first start downloads Python and dependencies, which takes about a minute. This page turns into the setup guide by itself when it's done.",
+  "重试": "Retry", "复制日志": "Copy log", "报告问题": "Report a problem", "日志": "Log", "已复制": "Copied",
+  "正在准备……": "Getting ready…", "重新开始……": "Starting over…", "马上就好……": "Almost there…",
+  "安装 Python 和依赖……第一次大约一分钟": "Installing Python and dependencies… about a minute the first time",
+  "另一个窗口正在准备，稍等……": "Another window is getting things ready; hang on…",
+  "下载 Python 和依赖没成功": "Downloading Python and dependencies failed",
+  "多半是网络问题（要能访问 GitHub 和 PyPI；用代理的话确认代理开着）。网络好了点“重试”。": "Most likely a network problem (GitHub and PyPI must be reachable; if you use a proxy, make sure it's on). Click “Retry” once the network is back.",
+  "看板没能启动": "The dashboard didn't start",
+  "点“重试”再试一次；还不行就把下面的日志复制给我们（报告问题）。": "Click “Retry” to try again; if it still fails, copy the log below into a bug report.",
+  "准备代码：": "Preparing code: ",
+};
+const tr = (s) => { if (!EN || !s) return s; if (EN[s]) return EN[s]; const k = Object.keys(EN).find((x) => x.endsWith("：") && s.startsWith(x)); return k ? EN[k] + s.slice(k.length) : s; };
+if (EN) { document.documentElement.lang = "en"; document.querySelectorAll("[data-t]").forEach((el) => (el.textContent = tr(el.textContent))); $("s").textContent = tr($("s").textContent); }
 async function tick() {
   try {
     const r = await fetch("/api/job", {cache: "no-store"});
     if (r.ok) return location.reload();
     const st = await (await fetch("/status", {cache: "no-store"})).json();
-    $("s").textContent = st.status;
+    $("s").textContent = tr(st.status);
     $("ok").style.display = st.failed ? "none" : "";
     $("fail").style.display = st.failed ? "block" : "none";
-    if (st.failed) { $("ft").textContent = st.status; $("fh").textContent = st.hint; $("fp").textContent = st.path; $("log").textContent = st.log; }
+    if (st.failed) { $("ft").textContent = tr(st.status); $("fh").textContent = tr(st.hint); $("fp").textContent = st.path; $("log").textContent = st.log; }
   } catch (e) {}
 }
 setInterval(tick, 1500); tick();
-$("retry").onclick = async () => { $("fail").style.display = "none"; $("ok").style.display = ""; $("s").textContent = "重新开始……"; await fetch("/retry", {method: "POST"}).catch(() => {}); };
-$("copy").onclick = () => navigator.clipboard.writeText($("log").textContent).then(() => { $("copy").textContent = "已复制"; });
+$("retry").onclick = async () => { $("fail").style.display = "none"; $("ok").style.display = ""; $("s").textContent = tr("重新开始……"); await fetch("/retry", {method: "POST"}).catch(() => {}); };
+$("copy").onclick = () => navigator.clipboard.writeText($("log").textContent).then(() => { $("copy").textContent = tr("已复制"); });
 </script></html>"""
 
 

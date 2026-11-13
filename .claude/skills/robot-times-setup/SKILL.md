@@ -5,20 +5,22 @@ description: Install, configure, upgrade or troubleshoot The Robot Times (daily 
 
 # The Robot Times：帮用户装好、配好、排错
 
-The Robot Times 每天从 arXiv 挑出用户该读的论文，写中文解读，排进阅读计划，一键加入 Zotero；另有业界简报和周报。
+The Robot Times 每天从 arXiv 挑出用户该读的论文，写解读（中文或英文），排进阅读计划，一键加入 Zotero；另有业界简报和周报。
 仓库：<https://github.com/huxiaoyi-ovo/robot-times>。这份说明自成一体，**不需要先把仓库下载下来**。
+英文版说明：同一文件夹里的 `SKILL.en.md`，内容一样。
 
 你的任务是替用户把它装好、设置好，并确认能用。用户只需要做三件只有他能做的事：
 输入一次管理员密码（Linux / macOS 装安装包时）、在 Zotero 弹窗里点 **Always Allow**、自己填大模型密钥。其余都由你来做。
 
-**和用户说中文，写法直白；每做完一步说一句结果，不要大段解释原理。**
+**用用户的语言（中文或英文）和他说话，写法直白；每做完一步说一句结果，不要大段解释原理。**
 
 ## 1. 先问清楚（一次问完）
 
+0. **语言**：看板和生成的内容（要点、解读、简报、周报、问 AI）用中文还是英文。默认跟用户和你说话的语言一样，不用专门问。
 1. **研究兴趣**：一两句话，越具体越好（例：“足式机器人运动控制、人形机器人全身控制、sim2real；不看纯视觉检测”）。
 2. **方向**：机器人（默认，arXiv cs.RO）还是别的（要 arXiv 分类，如 `cs.LG`，或 `cs.CV,cs.AI`）。
 3. **Zotero 文件夹**（可选）：“加入 Zotero”时放进哪个已有的文件夹；可以装好后再从列表里选。
-4. **大模型密钥**（可选，强烈建议）：有没有 DeepSeek 或其他 OpenAI 兼容接口的密钥。没有就只有英文摘要，没有中文解读和“问 AI”。
+4. **大模型密钥**（可选，强烈建议）：有没有 DeepSeek 或其他 OpenAI 兼容接口的密钥。没有就只有原文摘要，没有解读和“问 AI”。
 5. 只有用户提到手机、云端、不想让电脑一直开着时，才走第 6 节的云端版；默认装本地版。
 
 ## 2. 密钥的规矩
@@ -69,6 +71,7 @@ curl -s --noproxy localhost http://localhost:8765/api/job
 看板起来后，用户打开 <http://localhost:8765> 会看到四步设置引导，可以让用户自己点完。
 你也可以用下面的接口替用户做完：写操作要带 `Content-Type: application/json`，只能从本机访问。
 Windows 上用 `curl.exe`（不是 PowerShell 的 `curl` 别名）。下面把 `curl -s --noproxy localhost` 简写成 `curl`。
+想让报错和提示用英文，请求加上 `-H "X-Lang: en"`（不加时按设置里的语言，没设置过是中文）。
 
 ### 4.1 看现在到哪一步
 
@@ -124,9 +127,9 @@ curl -X PUT -H "Content-Type: application/json" -d '{"key":"sk-..."}' http://loc
 ### 4.6 完成
 
 ```bash
-# 机器人方向
+# 机器人方向；lang 是 "zh" 或 "en"
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"interests":"研究兴趣","zoteroCollection":"文件夹名或空字符串"}' http://localhost:8765/api/setup/finish
+  -d '{"interests":"研究兴趣","zoteroCollection":"文件夹名或空字符串","lang":"zh"}' http://localhost:8765/api/setup/finish
 # 其他方向：加上 "preset":"general","categories":["cs.LG","cs.AI"]
 ```
 
@@ -137,7 +140,7 @@ curl -X POST -H "Content-Type: application/json" \
 1. `curl http://localhost:8765/api/setup`：`done` 是 true，`zotero.authorized` 是 true。
 2. `curl http://localhost:8765/api/job`：`running` 是 `daily` 表示正在生成；变回 null、`last` 里没有错误就是好了。
 3. 请用户打开 <http://localhost:8765>，确认看到今天的论文；点一篇“加入 Zotero”，确认 Zotero 里出现了条目、PDF 和笔记。
-4. 告诉用户：应用列表里的 **The Robot Times** 就是入口（可以固定到程序坞 / 任务栏）；研究兴趣等以后在看板的“设置”里改。
+4. 告诉用户：应用列表里的 **The Robot Times** 就是入口（可以固定到程序坞 / 任务栏）；研究兴趣、语言等以后在看板的“设置”里改。
 
 更细的自检：`~/.robot-times/app/.venv/bin/robot-times doctor`（Windows：`%USERPROFILE%\.robot-times\app\.venv\Scripts\robot-times.exe doctor`），
 Zotero、写入权限、大模型都应该是 ✓。
