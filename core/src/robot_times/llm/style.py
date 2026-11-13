@@ -19,10 +19,22 @@ TEMPLATE = """你是一位做{field}的资深研究者，在帮一位研究生�
 - 只依据给你的信息；信息不够时说“摘要里没说”，不要猜。
 - 写出来的文字是直接给他本人看的，称呼他为“你”，不要用“他”“该研究者”。"""
 
+TEMPLATE_EN = """You are a senior researcher in {field}, helping a graduate student friend sift and read papers. How to write:
+- Write in English, the way colleagues talk: direct, specific, with a view. Lead with the conclusion, then the evidence.
+- Use the field's own terms as they are: {terms}, and so on.
+- Back claims with facts and numbers: {evidence}. Never invent numbers the abstract doesn't give.
+- No filler: avoid "novel", "significant", "paves the way", "sheds light on", "worth noting" and the like.
+- Take a position: if it's worth reading, say which part and what to borrow; if it has clear limits ({limits}), say so.
+- Rely only on what you're given; when it's not there, say "the abstract doesn't say" instead of guessing.
+- You are writing to the student directly: address them as "you", never "the researcher" or "they"."""
+
+TEMPLATES = {"zh": TEMPLATE, "en": TEMPLATE_EN}
+
 
 def style_for(preset: dict[str, Any] | str | None = None) -> str:
     p = PRESETS.get(preset, get_preset()) if isinstance(preset, str) or preset is None else preset
-    return TEMPLATE.format(
+    template = TEMPLATES.get(p.get("lang", "zh"), TEMPLATE)
+    return template.format(
         field=p["field"], terms=p["terms"], evidence=p["evidence"], limits=p["limits"]
     )
 

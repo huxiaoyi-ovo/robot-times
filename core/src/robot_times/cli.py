@@ -359,7 +359,9 @@ def cloud_news(
 
     settings = repo.load_settings(store, settings_fallback_from_env())
     # 每天顺带抓一次当天的天气，看板右上角显示（设置里填了城市才抓）
-    save_weather(store, target, str(settings.get("weatherCity") or ""))
+    save_weather(
+        store, target, str(settings.get("weatherCity") or ""), lang=settings.get("lang") or "zh"
+    )
     doc = run_news(store, llm_from_env(), settings, target)
     bad = [s["name"] for s in doc["sources"] if not s["ok"]]
     typer.echo(f"{doc['date']}：快讯 {len(doc['news'])} 条，深度 {len(doc['deep'])} 篇。")

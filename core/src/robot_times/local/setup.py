@@ -18,6 +18,7 @@ from ..cloud import repo
 from ..cloud.env import DEEPSEEK_BASE, DEEPSEEK_MODEL
 from ..cloud.store import Store
 from ..config import CONFIG_DIR
+from ..i18n import L
 from ..llm.rerank import LLMClient
 from ..zotero.local_api import ZoteroError, ZoteroLocalClient
 
@@ -158,7 +159,8 @@ class Setup:
                 "canEnable": find_prefs(self.roots) is not None,
             },  # fmt: skip
             "settings": {
-                k: s.get(k) for k in ("interests", "categories", "preset", "zoteroCollection")
+                k: s.get(k)
+                for k in ("interests", "categories", "preset", "zoteroCollection", "lang")
             },
             "llm": {
                 "configured": bool(key),
@@ -171,11 +173,20 @@ class Setup:
 
     def enable_local_api(self) -> dict[str, Any]:
         if self.zotero()["running"]:
-            raise SetupError("请先完全退出 Zotero（不是最小化），再点这个按钮。")
+            raise SetupError(
+                L(
+                    "请先完全退出 Zotero（不是最小化），再点这个按钮。",
+                    "Quit Zotero completely first (not just minimize), then click this button.",
+                )
+            )
         prefs = find_prefs(self.roots)
         if prefs is None:
             raise SetupError(
-                "没找到 Zotero 的配置文件夹：请先打开一次 Zotero，或者按页面上的说明手动勾选。"
+                L(
+                    "没找到 Zotero 的配置文件夹：请先打开一次 Zotero，或者按页面上的说明手动勾选。",
+                    "Couldn't find Zotero's profile folder: open Zotero once first, or tick the option "
+                    "by hand as described on the page.",
+                )
             )
         enable_pref(prefs)
         return {"ok": True, "prefs": str(prefs)}
@@ -194,11 +205,17 @@ class Setup:
             raise SetupError(str(e)) from None
         except httpx.HTTPError:
             raise SetupError(
-                "连不上 Zotero，或者等太久没点：请切到 Zotero，在弹窗里点 Always Allow。"
+                L(
+                    "连不上 Zotero，或者等太久没点：请切到 Zotero，在弹窗里点 Always Allow。",
+                    "Can't reach Zotero, or the pop-up timed out: switch to Zotero and click Always Allow.",
+                )
             ) from None
         if not z.key_is_persistent:
             raise SetupError(
-                "你点的是 Allow（只允许一次）。请再点一次“连接 Zotero”，这次选 Always Allow。"
+                L(
+                    "你点的是 Allow（只允许一次）。请再点一次“连接 Zotero”，这次选 Always Allow。",
+                    "You clicked Allow (once only). Click “Connect Zotero” again and choose Always Allow this time.",
+                )
             )
         self.key_file.parent.mkdir(parents=True, exist_ok=True)
         self.key_file.write_text(key, encoding="utf-8")
@@ -219,7 +236,10 @@ class Setup:
             names = {str(c.get("data", {}).get("name", "")).strip() for c in z.collections()}
         except (ZoteroError, httpx.HTTPError):
             raise SetupError(
-                "读不到 Zotero 的文件夹：请确认 Zotero 开着、已经允许本机程序访问。"
+                L(
+                    "读不到 Zotero 的文件夹：请确认 Zotero 开着、已经允许本机程序访问。",
+                    "Can't read Zotero collections: make sure Zotero is open and allows local apps.",
+                )
             ) from None
         return sorted(n for n in names if n)
 
@@ -228,21 +248,32 @@ class Setup:
     def save_llm(self, b: dict[str, Any]) -> dict[str, Any]:
         key = str(b.get("key") or "").strip()
         if not key:
-            raise SetupError("请粘贴密钥。")
+            raise SetupError(L("请粘贴密钥。", "Paste a key."))
         base = str(b.get("base") or "").strip().rstrip("/") or DEEPSEEK_BASE
         model = str(b.get("model") or "").strip() or DEEPSEEK_MODEL
         if not base.startswith(("https://", "http://localhost", "http://127.0.0.1")):
-            raise SetupError("接口地址要以 https:// 开头（本机的模型可以用 http://localhost）。")
+            raise SetupError(
+                L(
+                    "接口地址要以 https:// 开头（本机的模型可以用 http://localhost）。",
+                    "The API URL must start with https:// (http://localhost is fine for local models).",
+                )
+            )
         client = LLMClient(base, key, model, transport=self.llm_transport, timeout=60.0)
         try:
-            client.complete("只回复两个字：可以", system="", max_tokens=200)
+            client.complete(
+                L("只回复两个字：可以", "Reply with one word: OK"), system="", max_tokens=200
+            )
         except httpx.HTTPStatusError as e:
             code = e.response.status_code
-            raise SetupError({401: "密钥不对，请检查有没有复制完整。", 402: "账户余额不足，先充一点再试。",
-                              404: "接口地址或模型名不对。", 429: "请求太频繁，等一会儿再试。"}.get(
-                code, f"大模型返回了错误：HTTP {code}")) from None  # fmt: skip
+            raise SetupError({401: L("密钥不对，请检查有没有复制完整。", "Wrong key (401): check you copied all of it."),
+                              402: L("账户余额不足，先充一点再试。", "Insufficient balance (402): top up and try again."),
+                              404: L("接口地址或模型名不对。", "Wrong API URL or model name (404)."),
+                              429: L("请求太频繁，等一会儿再试。", "Too many requests (429); wait a bit and retry.")}.get(
+                code, L("大模型返回了错误：HTTP {}", "The LLM returned an error: HTTP {}").format(code))) from None  # fmt: skip
         except httpx.HTTPError as e:
-            raise SetupError(f"连不上大模型接口：{type(e).__name__}") from None
+            raise SetupError(
+                L("连不上大模型接口：", "Can't reach the LLM API: ") + type(e).__name__
+            ) from None
         custom = base != DEEPSEEK_BASE or model != DEEPSEEK_MODEL
         values = (
             {
@@ -265,9 +296,16 @@ class Setup:
 
     def finish(self, b: dict[str, Any]) -> dict[str, Any]:
         if not str(b.get("interests") or "").strip():
-            raise SetupError("写一两句研究兴趣吧，推荐主要靠它和你的 Zotero 文献库。")
+            raise SetupError(
+                L(
+                    "写一两句研究兴趣吧，推荐主要靠它和你的 Zotero 文献库。",
+                    "Write a sentence or two about your research interests; picks rely on them and your Zotero library.",
+                )
+            )
         changes = {
-            k: b[k] for k in ("interests", "categories", "preset", "zoteroCollection") if k in b
+            k: b[k]
+            for k in ("interests", "categories", "preset", "zoteroCollection", "lang")
+            if k in b
         }
         cats = changes.get("categories")
         if isinstance(cats, list) and cats and "preset" not in changes:

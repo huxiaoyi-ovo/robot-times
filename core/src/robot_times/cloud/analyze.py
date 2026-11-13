@@ -10,6 +10,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from ..i18n import L
 from ..llm.analysis import analyze
 from ..llm.rerank import LLMClient
 from . import repo
@@ -72,5 +73,9 @@ def analyze_papers(
     # 失败原因记进数据库，方便排查（GitHub 的运行日志不好拿）
     repo.set_json(store, "analyze_errors", {"at": repo.now_iso(), "errors": errors})
     if errors and problems is not None:
-        problems.append(f"有 {len(errors)} 篇论文的解读没写成：{errors[0]}")
+        problems.append(
+            L("有 {} 篇论文的解读没写成：{}", "Reviews failed for {} papers: {}").format(
+                len(errors), errors[0]
+            )
+        )
     return len(todo) - len(errors)

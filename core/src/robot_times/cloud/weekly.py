@@ -21,8 +21,34 @@ def iso_week(d: date) -> str:
     return f"{y}-W{w:02d}"
 
 
-def _titles(ps: list[dict]) -> str:
+def _titles(ps: list[dict], lang: str = "zh") -> str:
+    if lang == "en":
+        return "; ".join(f'"{p["title"]}"' for p in ps) or "(none)"
     return "；".join(f"《{p['title']}》" for p in ps) or "（无）"
+
+
+MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+
+
+def _md(d: date, lang: str) -> str:
+    return f"{MONTHS[d.month - 1]} {d.day}" if lang == "en" else f"{d.month}月{d.day}日"
+
+
+def _prompt_en(listing: str, done: list[dict], reading: list[dict], interests: str) -> str:
+    return (
+        f"Their research interests: {interests or '(not given)'}\n"
+        f"Marked as finished this week: {_titles(done, 'en')}\n"
+        f"Currently reading this week: {_titles(reading, 'en')}\n\n"
+        "Below are the papers recommended to them this week (ID, title, gist). Write this week's review as JSON:\n"
+        '{"headline": "...", "summary": "...", "trends": [{"title": "...", "body": "...", "paperIds": ["ID"]}]}\n'
+        "- headline: one sentence on what happened in their area this week, at most 16 words, concrete down to "
+        "methods or results.\n"
+        "- summary: 3 sentences. First: the most notable shift this week. Second: honestly, how much and what they "
+        "read this week (say so plainly if nothing). Third: which paper to catch up on first next week, and why.\n"
+        "- trends: 2–4 items. It only counts as a trend if at least two papers point to the same thing; write fewer "
+        "if there aren't enough. title at most 6 words; body 2 sentences naming the papers, how each does it and "
+        "the numbers; paperIds may only use IDs that appear below.\n\n" + listing
+    )
 
 
 def _llm_review(
@@ -33,9 +59,15 @@ def _llm_review(
     interests: str,
     preset: dict | None = None,
 ) -> dict[str, Any]:
+    sep = ": " if (preset or {}).get("lang") == "en" else "："
     listing = "\n".join(
-        f"[{p['id']}] {p['title']}：{p.get('summary') or p['abstract'][:300]}" for p in papers[:25]
+        f"[{p['id']}] {p['title']}{sep}{p.get('summary') or p['abstract'][:300]}"
+        for p in papers[:25]
     )
+    if (preset or {}).get("lang") == "en":
+        return parse_json_object(
+            _complete_json(llm, _prompt_en(listing, done, reading, interests), preset)
+        )
     prompt = (
         f"他的研究兴趣：{interests or '（未填写）'}\n"
         f"本周他标记读完的：{_titles(done)}\n"
@@ -68,13 +100,13 @@ def run_weekly(
         p for p in ordered if notes.get(p["id"], {}).get("status", "todo") in ("todo", "reading")
     ]
 
+    preset = get_preset(settings)
+    lang = preset["lang"]
     review: dict[str, Any] = {}
     if llm is not None and ordered:
         try:
             reading = [papers[i] for i, n in notes.items() if n["status"] == "reading"]
-            review = _llm_review(
-                llm, ordered, done, reading, settings.get("interests", ""), get_preset(settings)
-            )
+            review = _llm_review(llm, ordered, done, reading, settings.get("interests", ""), preset)
         except Exception as e:
             log.warning("LLM 写周报失败，只保存统计和计划：%s", e)
     valid = set(papers)
@@ -93,15 +125,24 @@ def run_weekly(
         "week": iso_week(monday),
         "start": monday.isoformat(),
         "end": sunday.isoformat(),
-        "range": f"{monday.month}月{monday.day}日–{sunday.month}月{sunday.day}日",
-        "headline": review.get("headline") or f"本周推荐 {len(ordered)} 篇，读完 {len(done)} 篇",
+        "range": f"{_md(monday, lang)}–{_md(sunday, lang)}",
+        "headline": review.get("headline")
+        or (
+            f"{len(ordered)} papers recommended this week, {len(done)} finished"
+            if lang == "en"
+            else f"本周推荐 {len(ordered)} 篇，读完 {len(done)} 篇"
+        ),
         "summary": review.get("summary", ""),
         "trends": trends,
         "picks": [p["id"] for p in ordered[:8]],
         "stats": {"recommended": len(ordered), "done": len(done), "days": len(days)},
         "nextWeek": {
-            "range": f"{next_monday.month}月{next_monday.day}日起，每天约 {minutes} 分钟",
-            "plan": week_plan(next_monday, minutes, deep, abstract),
+            "range": (
+                f"From {_md(next_monday, lang)}, about {minutes} minutes a day"
+                if lang == "en"
+                else f"{_md(next_monday, lang)}起，每天约 {minutes} 分钟"
+            ),
+            "plan": week_plan(next_monday, minutes, deep, abstract, lang=lang),
         },
         "generatedAt": repo.now_iso(),
     }

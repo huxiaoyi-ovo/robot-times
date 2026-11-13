@@ -1,4 +1,4 @@
-"""每日推荐：抓新论文 → 结合文献库和你的反馈打分 → LLM 精排写中文摘要 → 排阅读计划 → 存进数据库。"""
+"""每日推荐：抓新论文 → 结合文献库和你的反馈打分 → LLM 精排写摘要 → 排阅读计划 → 存进数据库。"""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from ..i18n import L, using
 from ..llm.rerank import LLMClient, parse_json_object
 from ..llm.style import style_for
 from ..models import Paper, ScoredPaper
@@ -129,10 +130,45 @@ def _headline(
     llm: LLMClient | None, top: list[dict], preset: dict | None = None
 ) -> tuple[str, str]:
     if not top:
-        return "今天没有新推荐", ""
+        return L("今天没有新推荐", "No new picks today"), ""
     fallback = (top[0]["title"], "")
     if llm is None:
         return fallback
+    if (preset or {}).get("lang") == "en":
+        prompt = _headline_prompt_en(top)
+    else:
+        prompt = _headline_prompt_zh(top)
+    try:
+        data = parse_json_object(_complete_json(llm, prompt, preset))
+        return str(data.get("headline") or fallback[0]), str(data.get("intro") or "")
+    except Exception as e:  # LLM 失败不影响当天推荐
+        log.warning("生成标题失败：%s", e)
+        return fallback
+
+
+def _headline_prompt_en(top: list[dict]) -> str:
+    tiers = {"deep": "close read", "abstract": "abstract", "scan": "skim"}
+    listing = "\n".join(
+        f"{i}. [{tiers.get(d['tier'], d['tier'])}] {d['title']}"
+        f"\n   Gist: {d.get('summary') or d['abstract'][:300]}"
+        f"\n   Why it matters to them: {d.get('why') or '(none)'}"
+        for i, d in enumerate(top[:5], 1)
+    )
+    return (
+        "Below are the top papers lined up for them today (in recommended order; #1 is their close read), "
+        "with each paper's gist and how it relates to them.\n"
+        "Write two parts, like a morning message to them:\n"
+        "headline: one sentence, at most 14 words, naming the most interesting concrete thing today "
+        '(who got what working how well, and how). No filler like "Today\'s picks" or "Worth a look".\n'
+        "intro: 2–3 full sentences, 45 to 80 words in total, not telegraphic. First say why #1 is today's close read "
+        "and what to focus on; then cover the others' highlights in one sentence. "
+        "If nothing today is really close to their work, say so and suggest spending the time on papers they "
+        "are already reading.\n"
+        'Output only JSON: {"headline": "...", "intro": "..."}\n\n' + listing
+    )
+
+
+def _headline_prompt_zh(top: list[dict]) -> str:
     tiers = {"deep": "精读", "abstract": "看摘要", "scan": "扫读"}
     listing = "\n".join(
         f"{i}. [{tiers.get(d['tier'], d['tier'])}] {d['title']}"
@@ -140,7 +176,7 @@ def _headline(
         f"\n   和他的关系：{d.get('why') or '（无）'}"
         for i, d in enumerate(top[:5], 1)
     )
-    prompt = (
+    return (
         "下面是今天排给他的前几篇论文（按推荐顺序，第 1 篇排给他精读），以及每篇的要点和与他的关系。\n"
         "写两段，像早上发给他的一条消息：\n"
         "headline：一句话，不超过 25 字，点出今天最值得看的具体东西（谁用什么办法把什么做到了什么程度），"
@@ -150,12 +186,6 @@ def _headline(
         "如果今天整体没有特别贴他方向的论文，就直说，建议他今天把时间花在补以前的在读论文上。\n"
         '只输出 JSON：{"headline": "...", "intro": "..."}\n\n' + listing
     )
-    try:
-        data = parse_json_object(_complete_json(llm, prompt, preset))
-        return str(data.get("headline") or fallback[0]), str(data.get("intro") or "")
-    except Exception as e:  # LLM 失败不影响当天推荐
-        log.warning("生成标题失败：%s", e)
-        return fallback
 
 
 def check_zotero_key(zotero: Any, problems: list[str]) -> dict[str, bool] | None:
@@ -168,20 +198,32 @@ def check_zotero_key(zotero: Any, problems: list[str]) -> dict[str, bool] | None
         log.warning("查不到 Zotero key 的权限：%s", e)
         return None
     log.info("Zotero key 权限：%s", access)
-    missing = [name for k, name in (("write", "写入"), ("notes", "笔记")) if not access.get(k)]
+    names = (("write", L("写入", "write")), ("notes", L("笔记", "notes")))
+    missing = [name for k, name in names if not access.get(k)]
     if missing:
         problems.append(
-            f"Zotero key 没有{'和'.join(missing)}权限，“加入 Zotero”会失败。"
-            "到 zotero.org/settings/keys 编辑这个 key，勾选 Allow write access 和 Allow notes access。"
+            L(
+                "Zotero key 没有{}权限，“加入 Zotero”会失败。"
+                "到 zotero.org/settings/keys 编辑这个 key，勾选 Allow write access 和 Allow notes access。",
+                "The Zotero key has no {} access, so “Add to Zotero” will fail. Edit the key at "
+                "zotero.org/settings/keys and tick Allow write access and Allow notes access.",
+            ).format(L("和", " or ").join(missing))
         )
     return access
 
 
 def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None) -> dict[str, Any]:
+    preset = get_preset(settings)
+    with using(preset["lang"]):  # 写进数据库、给用户看的提示按设置的语言
+        return _run_daily(deps, settings, preset, day)
+
+
+def _run_daily(
+    deps: DailyDeps, settings: dict[str, Any], preset: dict[str, Any], day: date | None
+) -> dict[str, Any]:
     day = day or today_local()
     store = deps.store
     weights = settings["weights"]
-    preset = get_preset(settings)
 
     problems: list[str] = []
     zotero_access = check_zotero_key(deps.zotero, problems)
@@ -194,8 +236,12 @@ def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None
         oldest = min(p.published for p in fetched)
         log.warning("arXiv 抓到上限 %d 篇，只覆盖到 %s", FETCH_LIMIT, oldest)
         problems.append(
-            f"选的 arXiv 分类论文太多，抓到上限 {FETCH_LIMIT} 篇就停了，只看了 {oldest} 以后提交的；"
-            f"在设置里少选几个分类，就能看全最近 {FETCH_DAYS} 天"
+            L(
+                "选的 arXiv 分类论文太多，抓到上限 {limit} 篇就停了，只看了 {oldest} 以后提交的；"
+                "在设置里少选几个分类，就能看全最近 {days} 天",
+                "The chosen arXiv categories have too many papers: fetching stopped at {limit}, so only papers "
+                "submitted after {oldest} were seen. Pick fewer categories in Settings to cover the last {days} days",
+            ).format(limit=FETCH_LIMIT, oldest=oldest, days=FETCH_DAYS)
         )
     if not papers:
         # 节假日 arXiv 不发布：不生成空的一天，看板继续显示上一次的推荐
@@ -204,7 +250,7 @@ def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None
             "date": day.isoformat(),
             "skipped": True,
             "picks": [],
-            "headline": "没有新论文，今天不生成推荐",
+            "headline": L("没有新论文，今天不生成推荐", "No new papers, so no picks today"),
         }
 
     upvotes: dict[str, int] | None = None
@@ -213,7 +259,9 @@ def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None
             upvotes = deps.hf_upvotes([day - timedelta(days=i) for i in range(4)])
         except Exception as e:
             log.warning("拿不到 Hugging Face 热度，本次不计热度：%s", e)
-            problems.append(f"Hugging Face 热度没拿到：{e}")
+            problems.append(
+                L("Hugging Face 热度没拿到：{}", "Couldn't get Hugging Face votes: {}").format(e)
+            )
 
     def annotate(sp: ScoredPaper) -> None:
         sp.impact, _ = venue_impact(sp.paper)
@@ -241,7 +289,11 @@ def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None
     )
     if llm_errors:
         log.warning("大模型精排失败 %d 批：%s", len(llm_errors), llm_errors)
-        problems.append(f"大模型精排有 {len(llm_errors)} 批失败：{llm_errors[0]}")
+        problems.append(
+            L("大模型精排有 {} 批失败：{}", "{} LLM ranking batches failed: {}").format(
+                len(llm_errors), llm_errors[0]
+            )
+        )
 
     scored = deep_first(scored)
     tiers = assign_tiers(len(scored))
@@ -250,7 +302,13 @@ def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None
     for sp, tier in zip(scored, tiers, strict=True):
         n = (upvotes or {}).get(sp.paper.id, 0)
         records.append(
-            paper_record(sp, tier, weights, added_on, f"Hugging Face {n} 赞" if n else "")
+            paper_record(
+                sp,
+                tier,
+                weights,
+                added_on,
+                L("Hugging Face {} 赞", "{} Hugging Face upvotes").format(n) if n else "",
+            )  # fmt: skip
         )
     carry_over(store, records)
     for rec in records:
@@ -276,6 +334,7 @@ def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None
         by_tier["abstract"],
         by_tier["scan"],
         reading=repo.notes_by_status(store, "reading"),
+        lang=preset["lang"],
     )
     headline, intro = _headline(deps.llm, records, preset)
     day_doc = {

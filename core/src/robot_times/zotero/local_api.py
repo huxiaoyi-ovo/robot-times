@@ -22,6 +22,7 @@ from typing import Any
 
 import httpx
 
+from ..i18n import L
 from ..models import Paper
 
 USER = "users/0"
@@ -62,11 +63,14 @@ class ZoteroLocalClient:
     def server_id(self) -> str:
         if self._server_id is None:
             resp = self._http.get(self._url(""))
-            self._check(resp, "连接 Zotero")
+            self._check(resp, L("连接 Zotero", "Connecting to Zotero"))
             self._remember_server_id(resp)
             if self._server_id is None:
                 raise ZoteroError(
-                    "Zotero 没有返回 Zotero-Server-ID，请确认是 Zotero 10 及以上版本。"
+                    L(
+                        "Zotero 没有返回 Zotero-Server-ID，请确认是 Zotero 10 及以上版本。",
+                        "Zotero didn't return a Zotero-Server-ID; make sure it's Zotero 10 or newer.",
+                    )
                 )
         return self._server_id
 
@@ -81,13 +85,22 @@ class ZoteroLocalClient:
     def _check(resp: httpx.Response, action: str) -> None:
         if resp.status_code == 403 and ("not enabled" in resp.text or not resp.text):
             raise ZoteroError(
-                f"{action}被拒绝（403）。请在 Zotero 设置 → 高级里开启"
-                "“允许此计算机上的其他应用程序与 Zotero 通信”。"
+                L(
+                    "{}被拒绝（403）。请在 Zotero 设置 → 高级里开启“允许此计算机上的其他应用程序与 Zotero 通信”。",
+                    "{} was refused (403). In Zotero Settings → Advanced, enable “Allow other "
+                    "applications on this computer to communicate with Zotero”.",
+                ).format(action)
             )
         if resp.status_code == 403:
-            raise ZoteroError(f"{action}被拒绝（403）：{resp.text[:200]}")
+            raise ZoteroError(
+                L("{}被拒绝（403）：{}", "{} was refused (403): {}").format(action, resp.text[:200])
+            )
         if resp.status_code >= 400:
-            raise ZoteroError(f"{action}失败：HTTP {resp.status_code} {resp.text[:200]}")
+            raise ZoteroError(
+                L("{}失败：HTTP {} {}", "{} failed: HTTP {} {}").format(
+                    action, resp.status_code, resp.text[:200]
+                )
+            )
 
     # ---------- 读 ----------
 
@@ -97,7 +110,7 @@ class ZoteroLocalClient:
         if limit:
             params["limit"] = limit
         resp = self._http.get(self._url(f"{USER}/items/top"), params=params)
-        self._check(resp, "读取文献库")
+        self._check(resp, L("读取文献库", "Reading the library"))
         self._remember_server_id(resp)
         return [
             it
@@ -107,7 +120,7 @@ class ZoteroLocalClient:
 
     def collections(self) -> list[dict[str, Any]]:
         resp = self._http.get(self._url(f"{USER}/collections"), params={"format": "json"})
-        self._check(resp, "读取分类")
+        self._check(resp, L("读取分类", "Reading collections"))
         return resp.json()
 
     # ---------- 写权限 ----------
@@ -120,10 +133,20 @@ class ZoteroLocalClient:
             headers={"Zotero-Server-ID": self.server_id},
         )
         if resp.status_code == 403 and "denied" in resp.text:
-            raise ZoteroError("你在 Zotero 弹窗里拒绝了写入权限。")
+            raise ZoteroError(
+                L(
+                    "你在 Zotero 弹窗里拒绝了写入权限。",
+                    "You denied write access in the Zotero pop-up.",
+                )
+            )
         if resp.status_code == 429:
-            raise ZoteroError("授权请求太频繁，请稍后再试。")
-        self._check(resp, "请求写入权限")
+            raise ZoteroError(
+                L(
+                    "授权请求太频繁，请稍后再试。",
+                    "Too many authorization requests (429); try again later.",
+                )
+            )
+        self._check(resp, L("请求写入权限", "Requesting write access"))
         body = resp.json()
         self.api_key = body["key"]
         self.key_is_persistent = bool(body.get("remember"))
@@ -162,10 +185,17 @@ class ZoteroLocalClient:
                 continue
             if resp.status_code == 412:
                 self._server_id = None
-                raise ZoteroError("Zotero 的服务器 ID 变了（可能换了数据目录），请重新运行。")
-            self._check(resp, "写入 Zotero")
+                raise ZoteroError(
+                    L(
+                        "Zotero 的服务器 ID 变了（可能换了数据目录），请重新运行。",
+                        "Zotero's server ID changed (maybe a different data directory); please run again.",
+                    )
+                )
+            self._check(resp, L("写入 Zotero", "Writing to Zotero"))
             return resp
-        raise ZoteroError("写入 Zotero 失败：授权无效。")
+        raise ZoteroError(
+            L("写入 Zotero 失败：授权无效。", "Writing to Zotero failed: invalid authorization.")
+        )
 
     def create_items(self, items: list[dict[str, Any]]) -> list[str]:
         """批量创建条目，返回新条目的 key（顺序与输入一致，失败的位置为空字符串）。"""
@@ -183,7 +213,7 @@ class ZoteroLocalClient:
         resp = self._http.get(self._url(f"{USER}/items/{key}"), params={"format": "json"})
         if resp.status_code == 404:
             return None
-        self._check(resp, "读取条目")
+        self._check(resp, L("读取条目", "Reading an item"))
         self._remember_server_id(resp)
         it = resp.json()
         return None if it.get("data", {}).get("deleted") else it
@@ -192,7 +222,7 @@ class ZoteroLocalClient:
         resp = self._http.get(self._url(f"{USER}/items/{key}/children"), params={"format": "json"})
         if resp.status_code == 404:
             return []
-        self._check(resp, "读取附件")
+        self._check(resp, L("读取附件", "Reading attachments"))
         return resp.json()
 
     def find_collection(self, name: str) -> str | None:
@@ -212,7 +242,12 @@ class ZoteroLocalClient:
             headers={"If-Unmodified-Since-Version": str(version)} if version is not None else {},
         )
         if resp.status_code == 412:
-            raise ZoteroError("这个条目刚在 Zotero 里改过，请再试一次。")
+            raise ZoteroError(
+                L(
+                    "这个条目刚在 Zotero 里改过，请再试一次。",
+                    "This item was just changed in Zotero; try again.",
+                )
+            )
 
     def trash(self, key: str) -> None:
         """移进 Zotero 的回收站（可以恢复），不是彻底删除。"""
@@ -238,7 +273,9 @@ class ZoteroLocalClient:
             auth["url"], content=body, headers={"Content-Type": auth["contentType"]}
         )
         if up.status_code >= 400:
-            raise ZoteroError(f"上传 PDF 失败：HTTP {up.status_code}")
+            raise ZoteroError(
+                L("上传 PDF 失败：HTTP {}", "PDF upload failed: HTTP {}").format(up.status_code)
+            )
         self._write(
             "POST", path, data={"upload": auth["uploadKey"]}, headers={"If-None-Match": "*"}
         )
@@ -288,7 +325,11 @@ def parse_write_response(body: dict[str, Any], batch_len: int, offset: int) -> l
     for i in range(batch_len):
         if str(i) in failed:
             msg = failed[str(i)].get("message", "")
-            raise ZoteroError(f"第 {offset + i + 1} 个条目写入失败：{msg}")
+            raise ZoteroError(
+                L("第 {} 个条目写入失败：{}", "Writing item {} failed: {}").format(
+                    offset + i + 1, msg
+                )
+            )
         keys.append(success.get(str(i), ""))
     return keys
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .i18n import norm
+
 PRESETS: dict[str, dict[str, Any]] = {
     "robotics": {
         "label": "机器人与具身智能",
@@ -76,15 +78,83 @@ PRESETS: dict[str, dict[str, Any]] = {
 
 DEFAULT = "robotics"
 
+# 英文版：设置里 lang 是 en 时，盖在上面的中文字段上（正则、分类、来源这些不分语言的不用写）
+PRESETS_EN: dict[str, dict[str, Any]] = {
+    "robotics": {
+        "label": "Robotics & embodied AI",
+        "field": "robot learning",
+        "terms": "whole-body control, sim2real, VLA, diffusion policy, ablation, teleoperation, loco-manipulation",
+        "evidence": "which robot platform, simulation or real hardware, which baseline, and by how much",
+        "limits": "simulation only, a single robot, no ablation, no strong baseline",
+        "reader": "knows the basics of RL, imitation learning and whole-body control",
+        "topics": ["Humanoids", "Legged robots", "Manipulation", "VLA & robot foundation models",
+                   "Navigation & perception", "World models & simulation", "Drones & other platforms", "Other"],
+        "topic_words": [
+            ("Humanoids", r"humanoid|whole-body control|biped"),
+            ("Legged robots", r"quadruped|legged|hexapod|locomotion|gait"),
+            ("Drones & other platforms", r"quadrotor|\bdrone|\buav\b|aerial|underwater|autonomous driving|vehicle"),
+            ("VLA & robot foundation models", r"vision-language-action|\bvla\b|foundation model|embodied brain|large language"),
+            ("Manipulation", r"manipulat|grasp|dexterous|\barm\b|bimanual"),
+            ("Navigation & perception", r"navigat|traversab|slam|mapping|perception|following"),
+            ("World models & simulation", r"world model|simulat|sim2real|sim-to-real"),
+        ],
+        "example": {
+            "summary_zh": "Quadrupeds fall on stairs mostly because foothold estimates are off. The authors turn the "
+            "height map into a foothold probability map and feed it straight to the policy, dropping the "
+            "plan-then-track pipeline. On a real Unitree Go2, stair success rises from 62% to 91%, mostly on the way down.",
+            "why_zh": "Same problem as the legged sim2real paper in your library; the foothold-probability "
+            "representation could drop straight into your terrain adaptation.",
+            "tip_zh": "Start with the observation design in Fig. 3 and the ablation in Table 2; the real robot was only tested on stairs.",
+        },
+        "news_focus": "robotics, embodied AI and the AI industry",
+        "news_categories": ["Embodied AI", "Robotics industry", "AI models & products", "AI business & funding",
+                            "Policy & safety", "Research"],
+        "news_fallback": ("Robotics industry", "AI business & funding"),
+    },
+    "general": {
+        "label": "General (machine learning and other fields)",
+        "field": "this field",
+        "terms": "method names, model names, dataset names and the field's common abbreviations",
+        "evidence": "which datasets and setup, which baseline, and by how much",
+        "limits": "small datasets only, no ablation, no strong baseline, best run only",
+        "reader": "knows the basics of the field",
+        "topics": ["New methods", "Theory", "Applications", "Data & evaluation", "Systems & tools",
+                   "Surveys & position papers", "Other"],
+        "topic_words": [
+            ("Surveys & position papers", r"\bsurvey\b|\breview\b|position paper|perspective"),
+            ("Data & evaluation", r"benchmark|dataset|evaluation"),
+            ("Theory", r"theorem|\bbound\b|convergence|provabl"),
+            ("Systems & tools", r"library|framework|toolkit|system for|open-source"),
+        ],
+        "example": {
+            "summary_zh": "In long-document QA, the more passages you retrieve, the more the model gets pulled off "
+            "course by irrelevant text. The authors first have the model score each passage for usefulness, then "
+            "pass only the high scorers to the answering model. It gains 4.1 points on average across three "
+            "long-document QA benchmarks, at the cost of one extra inference pass.",
+            "why_zh": "Same problem as the retrieval-augmented paper in your library; this filter-then-answer step is easy to try.",
+            "tip_zh": "Start with the main results in Table 2 and the passage-count ablation in Fig. 4; no comparison with stronger rerankers.",
+        },
+        "news_focus": "the AI industry",
+        "news_categories": ["AI models & products", "AI business & funding", "Policy & safety", "Research"],
+        "news_fallback": ("AI models & products", "AI business & funding"),
+    },
+}  # fmt: skip
+
 
 # 设置里可以单独覆盖的字段：报名、领域名（写进人设）
 OVERRIDES = {"siteName": "site_name", "field": "field"}
 
 
 def get_preset(settings: dict[str, Any] | None = None) -> dict[str, Any]:
-    """按设置里的 preset 取预设（没设或写错就用默认的机器人预设），再套上设置里单独改过的字段。"""
+    """按设置里的 preset 取预设（没设或写错就用默认的机器人预设），按 lang 换成对应语言，
+    再套上设置里单独改过的字段。返回的预设带 lang，提示词按它选语言。"""
     settings = settings or {}
-    p = dict(PRESETS.get(settings.get("preset") or DEFAULT, PRESETS[DEFAULT]))
+    name = settings.get("preset") if settings.get("preset") in PRESETS else DEFAULT
+    lang = norm(settings.get("lang"))
+    p = dict(PRESETS[name])
+    if lang == "en":
+        p.update(PRESETS_EN[name])
+    p["lang"] = lang
     for key, field in OVERRIDES.items():
         if str(settings.get(key) or "").strip():
             p[field] = str(settings[key]).strip()
@@ -103,20 +173,26 @@ def js_module() -> str:
     import json
 
     from . import __version__
-    from .llm.style import TEMPLATE
+    from .llm.style import TEMPLATES
 
     data = {k: {f: p[f] for f in JS_FIELDS} for k, p in PRESETS.items()}
+    data_en = {k: {f: p[f] for f in JS_FIELDS if f in p} for k, p in PRESETS_EN.items()}
     return (
         "// 自动生成，不要手改：改 core/src/robot_times/presets.py 或 llm/style.py 后运行\n"
         "//   uv run python -m robot_times.presets > web/app/src/presets.js\n"
         "// （Worker 主文件只能导出处理函数，所以放在单独的模块里；tests/test_prompts.py 检查两边一致）\n"
         f"export const PRESETS = {json.dumps(data, ensure_ascii=False, indent=2)};\n"
+        f"export const PRESETS_EN = {json.dumps(data_en, ensure_ascii=False, indent=2)};\n"
         f'export const DEFAULT_PRESET = "{DEFAULT}";\n'
         f'export const VERSION = "{__version__}"; // 来自 core/pyproject.toml\n'
-        f"const TEMPLATE = {json.dumps(TEMPLATE, ensure_ascii=False)};\n\n"
-        "// 和 Python 的 get_preset 一样：按设置取预设，再套上设置里单独改过的报名和领域名\n"
+        f"const TEMPLATES = {json.dumps(TEMPLATES, ensure_ascii=False, indent=2)};\n\n"
+        "// 和 Python 的 i18n.norm 一样：en 开头的是英文，其他都当中文\n"
+        'export const langOf = v => (String(v || "").trim().toLowerCase().startsWith("en") ? "en" : "zh");\n\n'
+        "// 和 Python 的 get_preset 一样：按设置取预设，按 lang 换语言，再套上设置里单独改过的报名和领域名\n"
         "export function presetFor(settings = {}) {\n"
-        "  const p = { ...(PRESETS[settings.preset] || PRESETS[DEFAULT_PRESET]) };\n"
+        "  const name = PRESETS[settings.preset] ? settings.preset : DEFAULT_PRESET;\n"
+        "  const lang = langOf(settings.lang);\n"
+        '  const p = { ...PRESETS[name], ...(lang === "en" ? PRESETS_EN[name] : {}), lang };\n'
         f"  for (const [key, field] of Object.entries({json.dumps(OVERRIDES)})) {{\n"
         '    const v = String(settings[key] || "").trim();\n'
         "    if (v) p[field] = v;\n"
@@ -124,7 +200,8 @@ def js_module() -> str:
         "  return p;\n"
         "}\n\n"
         "export function styleFor(preset) {\n"
-        "  return TEMPLATE.replace(/\\{(field|terms|evidence|limits)\\}/g, (_, k) => preset[k]);\n"
+        "  const t = TEMPLATES[preset.lang] || TEMPLATES.zh;\n"
+        "  return t.replace(/\\{(field|terms|evidence|limits)\\}/g, (_, k) => preset[k]);\n"
         "}\n"
     )
 

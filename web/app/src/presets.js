@@ -25,13 +25,37 @@ export const PRESETS = {
     "limits": "只在小数据集上、没有 ablation、没和强基线比、只报了最好的一次结果"
   }
 };
+export const PRESETS_EN = {
+  "robotics": {
+    "label": "Robotics & embodied AI",
+    "field": "robot learning",
+    "terms": "whole-body control, sim2real, VLA, diffusion policy, ablation, teleoperation, loco-manipulation",
+    "evidence": "which robot platform, simulation or real hardware, which baseline, and by how much",
+    "limits": "simulation only, a single robot, no ablation, no strong baseline"
+  },
+  "general": {
+    "label": "General (machine learning and other fields)",
+    "field": "this field",
+    "terms": "method names, model names, dataset names and the field's common abbreviations",
+    "evidence": "which datasets and setup, which baseline, and by how much",
+    "limits": "small datasets only, no ablation, no strong baseline, best run only"
+  }
+};
 export const DEFAULT_PRESET = "robotics";
 export const VERSION = "0.2.2"; // 来自 core/pyproject.toml
-const TEMPLATE = "你是一位做{field}的资深研究者，在帮一位研究生朋友筛论文、读论文。写作要求：\n- 用中文，像同行之间说话：直接、具体、有判断。先说结论，再说依据。\n- 专业术语保留英文原词，不要硬翻：{terms} 等。\n- 用事实和数字说话：{evidence}。摘要里没有的数字不要编。\n- 不写空话：不用“本文提出了一种新颖的”“具有重要意义”“显著提升”“为……提供了新思路”“值得关注”这类话。\n- 有态度：值得读就说读哪部分、能借鉴什么；有明显局限（{limits}）就直说。\n- 只依据给你的信息；信息不够时说“摘要里没说”，不要猜。\n- 写出来的文字是直接给他本人看的，称呼他为“你”，不要用“他”“该研究者”。";
+const TEMPLATES = {
+  "zh": "你是一位做{field}的资深研究者，在帮一位研究生朋友筛论文、读论文。写作要求：\n- 用中文，像同行之间说话：直接、具体、有判断。先说结论，再说依据。\n- 专业术语保留英文原词，不要硬翻：{terms} 等。\n- 用事实和数字说话：{evidence}。摘要里没有的数字不要编。\n- 不写空话：不用“本文提出了一种新颖的”“具有重要意义”“显著提升”“为……提供了新思路”“值得关注”这类话。\n- 有态度：值得读就说读哪部分、能借鉴什么；有明显局限（{limits}）就直说。\n- 只依据给你的信息；信息不够时说“摘要里没说”，不要猜。\n- 写出来的文字是直接给他本人看的，称呼他为“你”，不要用“他”“该研究者”。",
+  "en": "You are a senior researcher in {field}, helping a graduate student friend sift and read papers. How to write:\n- Write in English, the way colleagues talk: direct, specific, with a view. Lead with the conclusion, then the evidence.\n- Use the field's own terms as they are: {terms}, and so on.\n- Back claims with facts and numbers: {evidence}. Never invent numbers the abstract doesn't give.\n- No filler: avoid \"novel\", \"significant\", \"paves the way\", \"sheds light on\", \"worth noting\" and the like.\n- Take a position: if it's worth reading, say which part and what to borrow; if it has clear limits ({limits}), say so.\n- Rely only on what you're given; when it's not there, say \"the abstract doesn't say\" instead of guessing.\n- You are writing to the student directly: address them as \"you\", never \"the researcher\" or \"they\"."
+};
 
-// 和 Python 的 get_preset 一样：按设置取预设，再套上设置里单独改过的报名和领域名
+// 和 Python 的 i18n.norm 一样：en 开头的是英文，其他都当中文
+export const langOf = v => (String(v || "").trim().toLowerCase().startsWith("en") ? "en" : "zh");
+
+// 和 Python 的 get_preset 一样：按设置取预设，按 lang 换语言，再套上设置里单独改过的报名和领域名
 export function presetFor(settings = {}) {
-  const p = { ...(PRESETS[settings.preset] || PRESETS[DEFAULT_PRESET]) };
+  const name = PRESETS[settings.preset] ? settings.preset : DEFAULT_PRESET;
+  const lang = langOf(settings.lang);
+  const p = { ...PRESETS[name], ...(lang === "en" ? PRESETS_EN[name] : {}), lang };
   for (const [key, field] of Object.entries({"siteName": "site_name", "field": "field"})) {
     const v = String(settings[key] || "").trim();
     if (v) p[field] = v;
@@ -40,5 +64,6 @@ export function presetFor(settings = {}) {
 }
 
 export function styleFor(preset) {
-  return TEMPLATE.replace(/\{(field|terms|evidence|limits)\}/g, (_, k) => preset[k]);
+  const t = TEMPLATES[preset.lang] || TEMPLATES.zh;
+  return t.replace(/\{(field|terms|evidence|limits)\}/g, (_, k) => preset[k]);
 }

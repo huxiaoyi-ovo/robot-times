@@ -7,12 +7,14 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
+from ..i18n import LANGS, L
 from ..presets import DEFAULT as DEFAULT_PRESET
 from ..presets import PRESETS, get_preset
 from .store import Store
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "preset": DEFAULT_PRESET,  # 方向预设，见 presets.py
+    "lang": "zh",  # 生成内容和看板的语言：zh 或 en
     "interests": "",
     "weights": {"relevance": 0.5, "impact": 0.3, "buzz": 0.2},
     "dailyMinutes": 60,
@@ -56,7 +58,12 @@ def update_settings(s: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     if "categories" in b:
         cats = [str(c).strip() for c in (b["categories"] or []) if str(c).strip()]
         if not cats or len(cats) > 12 or not all(_CATEGORY.match(c) for c in cats):
-            raise SettingsError("arXiv 分类写法不对，例如 cs.RO、cs.LG、eess.SY。")
+            raise SettingsError(
+                L(
+                    "arXiv 分类写法不对，例如 cs.RO、cs.LG、eess.SY。",
+                    "arXiv categories look wrong; examples: cs.RO, cs.LG, eess.SY.",
+                )
+            )
         s["categories"] = cats
     if "interests" in b:
         s["interests"] = str(b["interests"])[:2000]
@@ -68,10 +75,10 @@ def update_settings(s: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
             except (KeyError, TypeError, ValueError):
                 v = -1
             if not 0 <= v <= 1:
-                raise SettingsError("权重要在 0 到 1 之间。")
+                raise SettingsError(L("权重要在 0 到 1 之间。", "Weights must be between 0 and 1."))
             w[k] = round(v, 2)
         if sum(w.values()) <= 0:
-            raise SettingsError("三个权重不能都是 0。")
+            raise SettingsError(L("三个权重不能都是 0。", "The three weights can't all be 0."))
         s["weights"] = w
     if "dailyMinutes" in b:
         s["dailyMinutes"] = max(15, min(240, round(_num(b["dailyMinutes"]) or 60)))
@@ -80,12 +87,16 @@ def update_settings(s: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     if "diversity" in b:
         v = _num(b["diversity"])
         if v is None or not 0 <= v <= 1:
-            raise SettingsError("多样性要在 0 到 1 之间。")
+            raise SettingsError(L("多样性要在 0 到 1 之间。", "Diversity must be between 0 and 1."))
         s["diversity"] = round(v, 2)
     if "preset" in b and b["preset"] is not None:
         if b["preset"] not in PRESETS:
-            raise SettingsError("没有这个方向预设。")
+            raise SettingsError(L("没有这个方向预设。", "Unknown field preset."))
         s["preset"] = b["preset"]
+    if "lang" in b and b["lang"] is not None:
+        if b["lang"] not in LANGS:
+            raise SettingsError(L("语言只能是 zh 或 en。", "Language must be zh or en."))
+        s["lang"] = b["lang"]
     for key, limit in (
         ("siteName", 60),
         ("field", 40),
@@ -101,10 +112,12 @@ def update_settings(s: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     if "newsFeeds" in b:
         feeds = [str(u).strip() for u in (b["newsFeeds"] or []) if str(u).strip()]
         if len(feeds) > 30:
-            raise SettingsError("订阅最多 30 个。")
+            raise SettingsError(L("订阅最多 30 个。", "At most 30 feeds."))
         bad = next((u for u in feeds if not _FEED.match(u)), None)
         if bad:
-            raise SettingsError(f"这个不像 RSS 地址：{bad}")
+            raise SettingsError(
+                L("这个不像 RSS 地址：{}", "This doesn't look like an RSS URL: {}").format(bad)
+            )
         s["newsFeeds"] = feeds
     return s
 

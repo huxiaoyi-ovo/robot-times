@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
+from ..i18n import L, set_lang
 from .api import LocalApi, Reply
 
 log = logging.getLogger("robot_times.server")
@@ -64,13 +65,17 @@ def make_handler(api: LocalApi, web_dir: Path = WEB_DIR) -> type[BaseHTTPRequest
             self._dispatch("DELETE")
 
         def _dispatch(self, method: str) -> None:
+            # 报错和提示的语言：页面带的 X-Lang（设置引导时还没存设置），没带就按设置
+            set_lang(self.headers.get("X-Lang") or api.lang())
             if not self._host_ok():
-                return self._json(Reply(403, {"error": "只能从本机访问。"}))
+                return self._json(
+                    Reply(403, {"error": L("只能从本机访问。", "Local access only.")})
+                )
             url = urlsplit(self.path)
             if not url.path.startswith("/api/"):
                 return self._static(url.path) if method == "GET" else self._json(Reply(405, {}))
             if method != "GET" and not self._write_ok():
-                return self._json(Reply(403, {"error": "请求来源不对。"}))
+                return self._json(Reply(403, {"error": L("请求来源不对。", "Bad request origin.")}))
             if (
                 method == "POST" and url.path == "/api/shutdown"
             ):  # robot-times local stop / restart 用

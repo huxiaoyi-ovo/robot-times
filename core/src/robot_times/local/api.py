@@ -19,6 +19,7 @@ import httpx
 
 from ..cloud import repo
 from ..cloud.store import Store
+from ..i18n import L, current, using
 from ..llm.rerank import LLMClient
 from ..llm.style import style_for
 from ..presets import PRESETS, get_preset
@@ -72,12 +73,14 @@ def ids_in_plan(plan: list[dict[str, Any]] | None) -> list[str]:
 
 def site_info(settings: dict[str, Any]) -> dict[str, Any]:
     p = get_preset(settings)
+    lang = p["lang"]
+    each = [get_preset({"preset": k, "lang": lang}) for k in PRESETS]
     return {
         "name": p["site_name"],
         "field": p["field"],
         "presets": [
             {"id": k, "label": x["label"], "siteName": x["site_name"], "field": x["field"]}
-            for k, x in PRESETS.items()
+            for k, x in zip(PRESETS, each, strict=True)
         ],
     }
 
@@ -106,28 +109,36 @@ def paper_item(p: dict[str, Any], tag: str) -> dict[str, Any]:
 
 def note_html(p: dict[str, Any], my_note: str = "") -> str:
     e = html.escape
-    parts = ["<h2>The Robot Times 摘要</h2>"]
+    parts = [L("<h2>The Robot Times 摘要</h2>", "<h2>The Robot Times summary</h2>")]
     if p.get("titleZh"):
         parts.append(f"<p><b>{e(p['titleZh'])}</b></p>")
     review = [x.strip() for x in str((p.get("analysis") or {}).get("review") or "").splitlines()]
     review = [x for x in review if x]
     if review:  # 解读分了段（做了什么 / 判断 / 对你）：每段一个 <p>，不然换行在笔记里会被吞掉
         parts.append(
-            f"<p><b>解读：</b>{e(review[0])}</p>" + "".join(f"<p>{e(x)}</p>" for x in review[1:])
+            f"<p><b>{L('解读：', 'Review: ')}</b>{e(review[0])}</p>"
+            + "".join(f"<p>{e(x)}</p>" for x in review[1:])
         )
     if p.get("summary"):
         parts.append(f"<p>{e(p['summary'])}</p>")
     if p.get("why"):
-        parts.append(f"<p><b>为什么推荐：</b>{e(p['why'])}</p>")
+        parts.append(f"<p><b>{L('为什么推荐：', 'Why it was picked: ')}</b>{e(p['why'])}</p>")
     if p.get("tip"):
-        parts.append(f"<p><b>怎么读：</b>{e(p['tip'])}</p>")
+        parts.append(f"<p><b>{L('怎么读：', 'How to read it: ')}</b>{e(p['tip'])}</p>")
     s = p.get("scores") or {}
     parts.append(
-        f"<p><i>综合分 {float(s.get('total') or 0):.1f} · 相关 {s.get('rel', '-')} · "
-        f"影响 {s.get('impact', '-')} · 热度 {s.get('buzz', '-')}</i></p>"
+        L(
+            "<p><i>综合分 {t:.1f} · 相关 {r} · 影响 {i} · 热度 {b}</i></p>",
+            "<p><i>Score {t:.1f} · relevance {r} · impact {i} · buzz {b}</i></p>",
+        ).format(
+            t=float(s.get("total") or 0),
+            r=s.get("rel", "-"),
+            i=s.get("impact", "-"),
+            b=s.get("buzz", "-"),
+        )
     )
     if my_note.strip():
-        parts.append("<h2>我的笔记</h2>")
+        parts.append(L("<h2>我的笔记</h2>", "<h2>My notes</h2>"))
         parts += [
             f"<p>{e(para).replace(chr(10), '<br>')}</p>"
             for para in re.split(r"\n{2,}", my_note.strip())
@@ -138,7 +149,9 @@ def note_html(p: dict[str, Any], my_note: str = "") -> str:
 def ask_prompt(
     p: dict[str, Any], interests: str, kind: str, question: str, context: str, my_note: str
 ) -> str:
-    """和看板 Worker 的 askPrompt 一样。"""
+    """和看板 Worker 的 askPrompt 一样。按当前语言（看板请求带的语言）写中文或英文提示词。"""
+    if current() == "en":
+        return _ask_prompt_en(p, interests, kind, question, context, my_note)
     head = (
         f"他的研究兴趣：{interests or '（未填写）'}\n\n"
         f"论文：{p['title']}\n作者：{', '.join(p.get('authors') or [])}\n发表：{p.get('venue') or ''}\n"
@@ -165,6 +178,40 @@ def ask_prompt(
         f"{head}\n他的问题：{question or '这篇论文最值得带走的一个 idea 是什么？主要局限在哪？'}\n\n"
         "回答方式：第一句直接回答。然后给依据，说明依据来自摘要还是他粘贴的原文。"
         "有不确定的地方，说清要看原文哪一部分才能确定。一般不超过 300 字，问题本身需要展开时可以更长。"
+    )
+
+
+def _ask_prompt_en(
+    p: dict[str, Any], interests: str, kind: str, question: str, context: str, my_note: str
+) -> str:
+    head = (
+        f"Their research interests: {interests or '(not given)'}\n\n"
+        f"Paper: {p['title']}\nAuthors: {', '.join(p.get('authors') or [])}\nPublished: {p.get('venue') or ''}\n"
+        + (f"Author comments: {p['comment']}\n" if p.get("comment") else "")
+        + f"Abstract: {p.get('abstract') or ''}\n"
+        + (f"Gist: {p['summary']}\n" if p.get("summary") else "")
+        + (
+            "Closest in their library: " + "; ".join(f'"{t}"' for t in p["related"]) + "\n"
+            if p.get("related")
+            else ""
+        )
+        + (f'\nPassage they pasted from the paper:\n"""\n{context}\n"""\n' if context else "")
+    )
+    if kind == "check":
+        return (
+            f'{head}\nTheir own notes:\n"""\n{my_note or "(empty)"}\n"""\n\n'
+            "Check these notes and give feedback on the three points below, a sentence or two each, quoting the exact sentence:\n"
+            "1. Are the problem, core idea and key result stated clearly?\n"
+            "2. Any misunderstanding (compare against the abstract and the pasted passage)?\n"
+            "3. One sentence they could add to connect it to related work or their own research.\n"
+            "Finish with a rewritten 3–5 sentence version: keep their own views and wording, and don't add judgments "
+            "they haven't made."
+        )
+    return (
+        f"{head}\nTheir question: {question or 'What is the one idea most worth taking away from this paper, and what is its main limitation?'}\n\n"
+        "How to answer: answer directly in the first sentence. Then give the evidence, saying whether it comes from "
+        "the abstract or the passage they pasted. Where you're unsure, say which part of the paper would settle it. "
+        "Usually no more than 150 words; go longer only if the question needs it."
     )
 
 
@@ -208,19 +255,27 @@ class LocalApi:
             log.warning("Zotero：%s %s：%s", method, path, e)
             return _error(502, str(e))
         except httpx.ConnectError:
-            return _error(502, "连不上 Zotero：请确认 Zotero 已经打开。")
+            return _error(
+                502,
+                L(
+                    "连不上 Zotero：请确认 Zotero 已经打开。",
+                    "Can't reach Zotero: make sure Zotero is open.",
+                ),
+            )
         except Exception as e:
             log.exception("接口出错：%s %s", method, path)
-            return _error(500, f"出错了：{type(e).__name__}: {str(e)[:200]}")
+            return _error(
+                500, L("出错了：", "Something went wrong: ") + f"{type(e).__name__}: {str(e)[:200]}"
+            )
 
     def _route(self, m: str, p: str, q: dict[str, str], raw: bytes) -> Reply:
         def body() -> dict[str, Any]:
             if len(raw) > 200_000:
-                raise ApiError(413, "内容太长了。")
+                raise ApiError(413, L("内容太长了。", "Too long."))
             try:
                 return json.loads(raw) if raw else {}
             except ValueError:
-                raise ApiError(400, "请求格式不对。") from None
+                raise ApiError(400, L("请求格式不对。", "Bad request format.")) from None
 
         def arg(pattern: str) -> str | None:
             g = re.fullmatch(pattern, p)
@@ -251,13 +306,13 @@ class LocalApi:
             return self.ask(body())
         if m == "POST" and (job := arg(r"/api/run/(daily|weekly|news)")):
             if self.jobs is None:
-                raise ApiError(400, "这里不能生成。")
+                raise ApiError(400, L("这里不能生成。", "Generating isn't available here."))
             return Reply(body=self.jobs.start(job, force=True))
         if p.startswith("/api/setup"):
             return self._setup_route(m, p, body)
         if p == "/api/update" and m in ("GET", "POST"):
             if self.updater is None:
-                raise ApiError(400, "这里不能更新。")
+                raise ApiError(400, L("这里不能更新。", "Updating isn't available here."))
             from .update import UpdateError
 
             try:
@@ -291,7 +346,7 @@ class LocalApi:
             return self._diagnose_route(m, p, q)
         if m == "GET" and p == "/api/job":
             return Reply(body=self.jobs.status() if self.jobs else None)
-        raise ApiError(404, "没有这个接口。")
+        raise ApiError(404, L("没有这个接口。", "No such endpoint."))
 
     # ---------- 读 ----------
 
@@ -328,7 +383,7 @@ class LocalApi:
         news = st.rows("select data from news order by date desc limit 1")
         news_dates = st.rows("select date from news order by date desc limit 30")
         return {
-            "me": "本机",
+            "me": L("本机", "this computer"),
             "mode": "local",
             "settings": settings,
             "days": days,
@@ -368,6 +423,13 @@ class LocalApi:
         except OSError:
             return None
 
+    def lang(self) -> str:
+        """设置里的语言（请求没带 X-Lang 时用）。"""
+        try:
+            return str(repo.load_settings(self.store).get("lang") or "zh")
+        except Exception:  # 数据库还没建好之类：当中文
+            return "zh"
+
     def ready(self) -> bool:
         """设置引导做完了没有（没做完之前不自动生成，Zotero 和研究兴趣都还没有）。"""
         return self.setup is None or self.setup.done()
@@ -395,7 +457,7 @@ class LocalApi:
 
         st = self.setup
         if st is None:
-            raise ApiError(404, "没有这个接口。")
+            raise ApiError(404, L("没有这个接口。", "No such endpoint."))
         routes = {
             ("GET", "/api/setup"): lambda: st.status(),
             ("POST", "/api/setup/enable-api"): lambda: st.enable_local_api(),
@@ -406,7 +468,7 @@ class LocalApi:
         }
         fn = routes.get((m, p))
         if fn is None:
-            raise ApiError(404, "没有这个接口。")
+            raise ApiError(404, L("没有这个接口。", "No such endpoint."))
         try:
             return Reply(body=fn())
         except SetupError as e:
@@ -422,16 +484,22 @@ class LocalApi:
         if m == "GET" and p == "/api/logs":
             name = q.get("name") or "serve"
             if name not in diagnose.LOGS:
-                raise ApiError(400, "没有这个日志。")
+                raise ApiError(400, L("没有这个日志。", "No such log."))
             return Reply(body=diagnose.tail(name, _int(q.get("lines"), 300)))
         if m == "POST" and p == "/api/restart":
             if self.jobs is not None and self.jobs.status()["running"]:
-                raise ApiError(400, "正在生成推荐，等生成完再重启。")
+                raise ApiError(
+                    400,
+                    L(
+                        "正在生成推荐，等生成完再重启。",
+                        "Picks are being generated; restart when that's done.",
+                    ),
+                )
             if self.restart is None:
-                raise ApiError(400, "这里不能重启。")
+                raise ApiError(400, L("这里不能重启。", "Restarting isn't available here."))
             threading.Timer(0.5, self.restart).start()  # 先把回复发出去
             return Reply(body={"ok": True})
-        raise ApiError(404, "没有这个接口。")
+        raise ApiError(404, L("没有这个接口。", "No such endpoint."))
 
     def _update_status(self) -> dict[str, Any] | None:
         """打开看板时顺便在后台查一下新版本（12 小时最多一次），不让页面等。"""
@@ -446,7 +514,7 @@ class LocalApi:
         text = (q.get("q") or "").strip()[:100]
         status = q.get("status") or ""
         if status and status not in STATUSES:
-            raise ApiError(400, "状态不对。")
+            raise ApiError(400, L("状态不对。", "Invalid status."))
         limit = min(100, max(1, _int(q.get("limit"), 50)))
         offset = max(0, _int(q.get("offset"), 0))
         like = "%" + re.sub(r"[\\%_]", lambda c: "\\" + c.group(0), text) + "%"
@@ -465,13 +533,13 @@ class LocalApi:
     def paper(self, pid: str) -> dict[str, Any]:
         rows = self.store.rows("select data from papers where id = ?", [pid])
         if not rows:
-            raise ApiError(404, "找不到这篇论文。")
+            raise ApiError(404, L("找不到这篇论文。", "Paper not found."))
         return json.loads(rows[0]["data"])
 
     def news(self, day: str) -> dict[str, Any]:
         rows = self.store.rows("select data from news where date = ?", [day])
         if not rows:
-            raise ApiError(404, "这一天没有业界简报。")
+            raise ApiError(404, L("这一天没有业界简报。", "No industry brief for this day."))
         return json.loads(rows[0]["data"])
 
     # ---------- 笔记和反馈 ----------
@@ -480,10 +548,10 @@ class LocalApi:
         self.paper(pid)
         status = b.get("status") or "todo"
         if status not in STATUSES:
-            raise ApiError(400, "阅读状态不对。")
+            raise ApiError(400, L("阅读状态不对。", "Invalid reading status."))
         note = str(b.get("note") or "")
         if len(note) > 50_000:
-            raise ApiError(413, "笔记太长了，拆成几段吧。")
+            raise ApiError(413, L("笔记太长了，拆成几段吧。", "The note is too long; split it up."))
         flags = (
             [str(f) for f in b.get("flags") or []][:12] if isinstance(b.get("flags"), list) else []
         )
@@ -500,7 +568,7 @@ class LocalApi:
         self.paper(pid)
         action = b.get("action")
         if action not in ("like", "skip", "clear"):
-            raise ApiError(400, "反馈类型不对。")
+            raise ApiError(400, L("反馈类型不对。", "Invalid feedback type."))
         self.store.run(
             "delete from feedback where paper_id = ? and action in ('like', 'skip')", [pid]
         )
@@ -517,7 +585,11 @@ class LocalApi:
         if self.zotero is None or not self.zotero.api_key:
             raise ApiError(
                 400,
-                "还不能写入 Zotero：到“设置”页点“连接 Zotero”，在 Zotero 弹窗里点 Always Allow。",
+                L(
+                    "还不能写入 Zotero：到“设置”页点“连接 Zotero”，在 Zotero 弹窗里点 Always Allow。",
+                    "Can't write to Zotero yet: in Settings, click “Connect Zotero” and choose Always Allow in "
+                    "the Zotero pop-up.",
+                ),
             )
         return self.zotero
 
@@ -532,7 +604,11 @@ class LocalApi:
         if key is None:
             raise ApiError(
                 400,
-                f"Zotero 里找不到名为“{name}”的文件夹。先在 Zotero 里建好，或者到“设置”里改成已有的文件夹名。",
+                L(
+                    "Zotero 里找不到名为“{}”的文件夹。先在 Zotero 里建好，或者到“设置”里改成已有的文件夹名。",
+                    "There is no collection named “{}” in Zotero. Create it in Zotero first, or change it to an "
+                    "existing collection in Settings.",
+                ).format(name),
             )
         return key
 
@@ -546,17 +622,19 @@ class LocalApi:
     def _attach_pdf(self, z: ZoteroLocalClient, parent: str, p: dict[str, Any]) -> str | None:
         """下载 arXiv 的 PDF，存进本机 Zotero。返回失败原因，成功返回 None。"""
         if not p.get("pdf"):
-            return "这篇没有 PDF 地址"
+            return L("这篇没有 PDF 地址", "this paper has no PDF link")
         try:
             r = self.http.get(p["pdf"], headers={"User-Agent": PDF_UA, "Accept": "application/pdf"})
         except httpx.HTTPError as e:
-            return f"下载 PDF 失败（{type(e).__name__}）"
+            return L("下载 PDF 失败（{}）", "PDF download failed ({})").format(type(e).__name__)
         if r.status_code != 200:
-            return f"下载 PDF 失败（HTTP {r.status_code}）"
+            return L("下载 PDF 失败（HTTP {}）", "PDF download failed (HTTP {})").format(
+                r.status_code
+            )
         if "pdf" not in r.headers.get("content-type", "").lower():
-            return "下载到的不是 PDF"
+            return L("下载到的不是 PDF", "the download wasn't a PDF")
         if len(r.content) > MAX_PDF:
-            return "PDF 超过 40 MB，没有存"
+            return L("PDF 超过 40 MB，没有存", "the PDF is over 40 MB, not saved")
         filename = re.sub(r"[^\w.-]+", "_", str(p["id"])) + ".pdf"
         try:
             att = z.create_items(
@@ -655,20 +733,25 @@ class LocalApi:
         if self.llm_stream is None:
             raise ApiError(
                 400,
-                "还没配置大模型：到“设置”页点“连接 Zotero、配大模型”，填上密钥就能用。",
+                L(
+                    "还没配置大模型：到“设置”页点“连接 Zotero、配大模型”，填上密钥就能用。",
+                    "No LLM configured yet: in Settings, click “Connect Zotero, set up the LLM” and paste a key.",
+                ),
             )
         p = self.paper(str(b.get("paperId") or ""))
         settings = repo.load_settings(self.store)
-        prompt = ask_prompt(
-            p,
-            settings.get("interests", ""),
-            str(b.get("kind") or ""),
-            str(b.get("question") or "")[:2000],
-            str(b.get("context") or "")[:60_000],
-            str(b.get("note") or "")[:10_000],
-        )
+        preset = get_preset(settings)
+        with using(preset["lang"]):  # 回答的语言跟设置走
+            prompt = ask_prompt(
+                p,
+                settings.get("interests", ""),
+                str(b.get("kind") or ""),
+                str(b.get("question") or "")[:2000],
+                str(b.get("context") or "")[:60_000],
+                str(b.get("note") or "")[:10_000],
+            )
         messages = [
-            {"role": "system", "content": style_for(get_preset(settings))},
+            {"role": "system", "content": style_for(preset)},
             {"role": "user", "content": prompt},
         ]
         return Reply(stream=self.llm_stream(messages))
@@ -697,14 +780,18 @@ def stream_chat(llm_base: str, api_key: str, model: str, http: httpx.Client | No
         try:
             resp = client.send(req, stream=True)
         except httpx.HTTPError as e:
-            raise ApiError(502, f"连不上大模型：{type(e).__name__}") from None
+            raise ApiError(
+                502, L("连不上大模型：", "Can't reach the LLM: ") + type(e).__name__
+            ) from None
         if resp.status_code != 200:  # 先看状态码，出错时看板能显示原因
             resp.close()
-            msg = {401: "大模型拒绝了请求：检查密钥。", 402: "大模型账户余额不足。",
-                   429: "大模型请求太频繁，稍后再试。"}.get(resp.status_code)  # fmt: skip
+            msg = {401: L("大模型拒绝了请求：检查密钥。", "The LLM rejected the request (401): check the key."),
+                   402: L("大模型账户余额不足。", "Insufficient balance on the LLM account (402)."),
+                   429: L("大模型请求太频繁，稍后再试。", "Too many requests to the LLM (429); try again later.")
+                   }.get(resp.status_code)  # fmt: skip
             raise ApiError(
                 502 if resp.status_code != 429 else 503,
-                msg or f"大模型出错了：HTTP {resp.status_code}",
+                msg or L("大模型出错了：HTTP {}", "LLM error: HTTP {}").format(resp.status_code),
             )
 
         def chunks() -> Iterator[bytes]:

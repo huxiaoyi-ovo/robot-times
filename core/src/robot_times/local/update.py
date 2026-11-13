@@ -30,6 +30,7 @@ import httpx
 from .. import __version__
 from ..cloud import repo
 from ..cloud.store import Store
+from ..i18n import L
 
 log = logging.getLogger("robot_times.update")
 
@@ -144,11 +145,21 @@ class Updater:
         """看板上点“更新”：在后台更新，完成后重启看板。"""
         st = self.status()
         if not st["available"]:
-            raise UpdateError("已经是最新版本。")
+            raise UpdateError(L("已经是最新版本。", "Already up to date."))
         if st["method"] == "none":
-            raise UpdateError("这份代码不是用安装脚本装的，没法自动更新：请自己 git pull。")
+            raise UpdateError(
+                L(
+                    "这份代码不是用安装脚本装的，没法自动更新：请自己 git pull。",
+                    "This copy wasn't installed by the installer, so it can't update itself: run git pull.",
+                )
+            )
         if self.busy():
-            raise UpdateError("正在生成推荐，等生成完再更新。")
+            raise UpdateError(
+                L(
+                    "正在生成推荐，等生成完再更新。",
+                    "Picks are being generated; update when that's done.",
+                )
+            )
         with self._lock:
             if self.state in ("updating", "restarting"):
                 return self.status()
@@ -196,7 +207,11 @@ class Updater:
         changed = _out(["git", "status", "--porcelain", "--untracked-files=no"], self.root)
         if changed.strip():
             raise UpdateError(
-                "你改过代码文件夹里的文件，没法自动更新。在代码文件夹里运行 git stash 后再试，或者自己 git pull。"
+                L(
+                    "你改过代码文件夹里的文件，没法自动更新。在代码文件夹里运行 git stash 后再试，或者自己 git pull。",
+                    "Files in the code folder were changed, so it can't update itself. Run git stash in the "
+                    "code folder and try again, or git pull yourself.",
+                )
             )
         self.run(
             [
@@ -219,11 +234,13 @@ class Updater:
         with tempfile.TemporaryDirectory() as tmp, zipfile.ZipFile(io.BytesIO(r.content)) as z:
             for name in z.namelist():  # 防止压缩包里有 ../ 之类跳出目录的路径
                 if name.startswith("/") or ".." in Path(name).parts:
-                    raise UpdateError("下载的压缩包不对。")
+                    raise UpdateError(L("下载的压缩包不对。", "The downloaded archive is invalid."))
             z.extractall(tmp)
             top = next(p for p in Path(tmp).iterdir() if p.is_dir())
             if not (top / "core" / "pyproject.toml").exists():
-                raise UpdateError("下载的压缩包里没有代码。")
+                raise UpdateError(
+                    L("下载的压缩包里没有代码。", "The downloaded archive has no code in it.")
+                )
             for name in CODE:
                 src, dst = top / name, self.root / name
                 if not src.exists():
@@ -240,7 +257,12 @@ class Updater:
     def _sync(self) -> None:
         uv = find_uv()
         if uv is None:
-            raise UpdateError("找不到 uv，代码已经更新，请在代码文件夹里运行 uv sync 后重启看板。")
+            raise UpdateError(
+                L(
+                    "找不到 uv，代码已经更新，请在代码文件夹里运行 uv sync 后重启看板。",
+                    "Couldn't find uv. The code is updated; run uv sync in the code folder and restart the dashboard.",
+                )
+            )
         cmd = [uv, "sync", "--frozen"]  # 按仓库里的 uv.lock 装，不改写它
         try:
             import sentence_transformers  # noqa: F401
@@ -277,7 +299,11 @@ def restart_dashboard(port: int = 8765) -> None:
 def _run(cmd: list[str], cwd: Path) -> None:
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=900)  # noqa: S603
     if r.returncode != 0:
-        raise UpdateError(f"{' '.join(cmd[:3])} 失败：{(r.stderr or r.stdout).strip()[-300:]}")
+        raise UpdateError(
+            L("{} 失败：{}", "{} failed: {}").format(
+                " ".join(cmd[:3]), (r.stderr or r.stdout).strip()[-300:]
+            )
+        )
 
 
 def _out(cmd: list[str], cwd: Path) -> str:

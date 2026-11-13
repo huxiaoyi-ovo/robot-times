@@ -1,4 +1,4 @@
-"""每天的业界简报：抓各来源 → 去重 → 大模型筛选、分类、写中文标题和摘要 → 存进数据库。"""
+"""每天的业界简报：抓各来源 → 去重 → 大模型筛选、分类、写标题和摘要（中文或英文） → 存进数据库。"""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from typing import Any
 from ..cloud import repo
 from ..cloud.store import Store
 from ..llm.rerank import LLMClient, parse_json_array, parse_json_object
+from ..llm.style import style_for
 from ..presets import get_preset
 from .fetch import fetch_all
 from .sources import custom_sources, sources_for
@@ -53,6 +54,45 @@ RULES = {
     "deep": ("篇深度文章", "2 句，不超过 110 字，说清作者的核心论点和依据。"),
 }
 
+# 英文版：title_zh 字段名不变（存进数据库叫 titleZh），里面装英文标题
+PROMPT_EN = """Their research interests: {interests}
+They follow what's happening in {focus}: who launched what, who raised how much, which results are real progress,
+where the industry is heading.
+
+Below are {n} {kind} (index, source, original title, excerpt). Judge each one:
+- keep: whether it belongs in today's brief. Keep only substantive items: product or model launches, real-robot
+  demos and deployments, funding and M&A, important research results, policy and regulation, insightful analysis.
+  Hiring, event announcements, advertorials, tutorials, filler listicles and duplicate coverage are all false.
+- category: pick one of {categories}.
+- score: 0–10, how much it matters to them. 9–10 is a big-news-of-the-week item for this field; below 5 doesn't
+  make the cut. Spread the scores out. Items directly related to their research interests score a point or two
+  higher than general industry news of similar weight (funding, IPOs, people moves).
+- title_zh: an English headline, at most 14 words, like a newspaper headline naming the subject and the key
+  number (e.g. "Figure raises $1B at a $39B valuation"). Write a fresh headline even if the original is English.
+- summary: {summary_rule} Use only facts in the excerpt; never invent numbers.
+- why: one sentence (at most 20 words) telling them why it's worth reading; empty string if there's no particular reason.
+
+Output only JSON: {{"items": [{{"i": index, "keep": true, "category": "...", "score": 7, "title_zh": "...", "summary": "...", "why": "..."}}]}}
+
+{listing}
+"""
+EVENT_PROMPT_EN = """Below are {n} items from today's brief (index, headline). Find the ones covering the same event:
+different angles on the same launch, the same funding round or the same IPO ("files for IPO", "plans to raise",
+"founder cashes out") all count as one event.
+
+Output only JSON: {{"groups": [[index, index], ...]}}, each group being two or more items about the same event;
+if there are no duplicates, output {{"groups": []}}.
+
+{listing}
+"""
+RULES_EN = {
+    "news": ("news items", "1–2 sentences, at most 45 words: who, what they did, the key numbers."),
+    "deep": (
+        "long-form articles",
+        "2 sentences, at most 55 words: the author's core argument and evidence.",
+    ),
+}
+
 
 def _norm_title(t: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+|[一-鿿]", t.lower()))
@@ -90,22 +130,30 @@ def fresh_only(store: Store, items: list[dict], day: date) -> list[dict]:
 def _llm_batch(
     llm: LLMClient, batch: list[dict], kind: str, interests: str, preset: dict[str, Any]
 ) -> list[dict]:
-    label, rule = RULES[kind]
+    en = preset.get("lang") == "en"
+    label, rule = (RULES_EN if en else RULES)[kind]
     categories = preset["news_categories"]
-    listing = "\n\n".join(
-        f"[{i}] 来源：{it['source']}\n标题：{it['title']}\n摘录：{it['excerpt'][:500] or '（无）'}"
-        for i, it in enumerate(batch)
-    )
-    prompt = PROMPT.format(
-        interests=interests or "（未填写）",
+    if en:
+        listing = "\n\n".join(
+            f"[{i}] Source: {it['source']}\nTitle: {it['title']}\nExcerpt: {it['excerpt'][:500] or '(none)'}"
+            for i, it in enumerate(batch)
+        )
+    else:
+        listing = "\n\n".join(
+            f"[{i}] 来源：{it['source']}\n标题：{it['title']}\n摘录：{it['excerpt'][:500] or '（无）'}"
+            for i, it in enumerate(batch)
+        )
+    prompt = (PROMPT_EN if en else PROMPT).format(
+        interests=interests or ("(not given)" if en else "（未填写）"),
         focus=preset["news_focus"],
         n=len(batch),
         kind=label,
-        categories="、".join(categories),
+        categories=(", " if en else "、").join(categories),
         summary_rule=rule,
         listing=listing,
     )
-    results = parse_json_array(llm.complete(prompt, json_mode=True))
+    kw = {"system": style_for(preset)} if en else {}  # 中文沿用默认的写作风格
+    results = parse_json_array(llm.complete(prompt, json_mode=True, **kw))
     out = []
     for r in results:
         try:
@@ -122,22 +170,30 @@ def _llm_batch(
         if cat not in categories:
             cat = preset["news_fallback"][1]
         out.append({**it, "category": cat, "score": score,
-                    "titleZh": str(r.get("title_zh") or it["title"])[:60],
+                    "titleZh": str(r.get("title_zh") or it["title"])[:120 if en else 60],
                     "summary": str(r.get("summary") or ""), "why": str(r.get("why") or "")})  # fmt: skip
     return out
 
 
-def merge_events(llm: LLMClient | None, items: list[dict], errors: list[str]) -> list[dict]:
+def merge_events(
+    llm: LLMClient | None, items: list[dict], errors: list[str], lang: str = "zh"
+) -> list[dict]:
     """同一件事的不同报道只留第一条（items 已按重要性排好）。标题去重挡不住“启动 IPO / 拟募资 / 创始人套现”这种。"""
     if llm is None or len(items) < 2:
         return items
     listing = "\n".join(f"[{i}] {it['titleZh']}" for i, it in enumerate(items))
+    template = EVENT_PROMPT_EN if lang == "en" else EVENT_PROMPT
     try:
         data = parse_json_object(
-            llm.complete(EVENT_PROMPT.format(n=len(items), listing=listing), json_mode=True)
+            llm.complete(
+                template.format(n=len(items), listing=listing),
+                json_mode=True,
+                **({"system": style_for(get_preset({"lang": "en"}))} if lang == "en" else {}),
+            )
         )
     except Exception as e:  # 合并失败不影响简报，照原样放
-        errors.append(f"合并同一事件失败：{type(e).__name__} {str(e)[:120]}")
+        head = "Merging duplicate events failed" if lang == "en" else "合并同一事件失败"
+        errors.append(f"{head}{': ' if lang == 'en' else '：'}{type(e).__name__} {str(e)[:120]}")
         return items
     drop: set[int] = set()
     for group in data.get("groups") or []:
@@ -229,7 +285,7 @@ def run_news(
         it for it in judge(llm, deep, "deep", interests, errors, preset) if it["score"] >= 5
     ]
     picked_news = dedupe(sorted(picked_news, key=_sort_key), key="titleZh")
-    picked_news = merge_events(llm, picked_news[: MAX_NEWS * 2], errors)[:MAX_NEWS]
+    picked_news = merge_events(llm, picked_news[: MAX_NEWS * 2], errors, preset["lang"])[:MAX_NEWS]
     picked_deep = sorted(picked_deep, key=_sort_key)[:MAX_DEEP]
 
     def public(it: dict) -> dict:  # 不存原文摘录，只存链接和我们自己写的摘要

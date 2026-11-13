@@ -1,4 +1,4 @@
-"""用 LLM 精排并写中文摘要。接口兼容 OpenAI 的 /chat/completions，
+"""用 LLM 精排并写摘要（中文或英文，按预设的 lang）。接口兼容 OpenAI 的 /chat/completions，
 所以可以指向 OpenAI、Anthropic 的兼容端点、DeepSeek，或本地 Ollama（http://localhost:11434/v1）。
 """
 
@@ -50,6 +50,50 @@ PROMPT = """他的研究兴趣：{interests}
 
 {papers}
 """
+
+PROMPT_EN = """Their research interests: {interests}
+
+Below are {n} candidate papers from today. Each has an ID, title and abstract, plus the papers in their Zotero
+library closest to it (found by vector search; for reference only, may not really be related).
+
+For each paper output:
+- score: an integer 0–10, how worth reading it is for them.
+  9–10: right on their topic; they will very likely use the method or result.
+  7–8: solid work in the same area; worth reading the abstract and figures.
+  4–6: adjacent area; enough to know it exists.
+  0–3: basically unrelated to their work.
+  The score is absolute, not relative to the other papers in this batch: a batch can be all low, or have several high.
+  A stated acceptance at a well-known venue in the comments or publication info (prefer the venues they name in
+  their interests) can add a point or two, but cannot lift an off-topic paper to a high score.
+- summary_zh: 2–3 sentences, at most 70 words in total, in English. First sentence: the problem, down to the concrete
+  setting. Second: the core idea in one sentence (don't list modules). Third: the result (platform, simulation or
+  real hardware, baseline, numbers). Don't open with "This paper", "The authors propose" or "To address".
+- why_zh: 1 sentence, at most 30 words, in English, addressed to them ("you"): what they can borrow, or how it relates
+  to a paper in their library (a different take on the same problem, a follow-up, same platform or data).
+  If the score is low, say plainly why they can skip it.
+- tip_zh: 1 sentence, at most 30 words, in English, how to read it: which figure or section first, what to watch
+  for. Empty string if score is below 7.
+- topic: which area it mainly belongs to; pick one of: {topics}.
+
+Example of the style (the content is made up):
+{{"id": "0000.00000", "score": 8,
+ "summary_zh": "{ex_summary}",
+ "why_zh": "{ex_why}",
+ "tip_zh": "{ex_tip}"}}
+
+Output only one JSON object: {{"papers": [one object per paper with fields id, score, summary_zh, why_zh, tip_zh, topic]}}, nothing else.
+
+{papers}
+"""
+
+PROMPTS = {"zh": PROMPT, "en": PROMPT_EN}
+# 给大模型的论文信息里的几个标签
+BLOCK = {
+    "zh": {"venue": "发表：", "comment": "作者备注：", "related": "他库里最接近的：", "sep": "；",
+           "quote": "《{}》", "none": "（未填写，请按摘要质量判断）", "join": "、"},
+    "en": {"venue": "Published: ", "comment": "Author comments: ", "related": "Closest in their library: ",
+           "sep": "; ", "quote": "\"{}\"", "none": "(not given; judge by the quality of the abstract)", "join": ", "},
+}  # fmt: skip
 
 
 class LLMClient:
@@ -118,15 +162,15 @@ def parse_json_array(text: str) -> list[dict[str, Any]]:
     return [d for d in data if isinstance(d, dict)]
 
 
-def _paper_block(sp: ScoredPaper) -> str:
-    p = sp.paper
+def _paper_block(sp: ScoredPaper, lang: str = "zh") -> str:
+    p, b = sp.paper, BLOCK.get(lang, BLOCK["zh"])
     lines = [f"[{p.id}] {p.title}", p.abstract[:1500]]
     if p.venue:
-        lines.append(f"发表：{p.venue[:200]}")
+        lines.append(f"{b['venue']}{p.venue[:200]}")
     if p.comment:
-        lines.append(f"作者备注：{p.comment[:200]}")
+        lines.append(f"{b['comment']}{p.comment[:200]}")
     if sp.related:
-        lines.append("他库里最接近的：" + "；".join(f"《{t}》" for t in sp.related))
+        lines.append(b["related"] + b["sep"].join(b["quote"].format(t) for t in sp.related))
     return "\n".join(lines)
 
 
@@ -146,7 +190,7 @@ def _apply(
         sp.why_zh = str(r.get("why_zh", "") or "")
         sp.tip_zh = str(r.get("tip_zh", "") or "")
         topic = str(r.get("topic", "") or "").strip()
-        sp.topic = topic if topic in topics else ("其他" if topic else "")
+        sp.topic = topic if topic in topics else (topics[-1] if topic else "")  # 最后一个是“其他”
         n += 1
     return n
 
@@ -160,7 +204,8 @@ def rerank(
 ) -> list[ScoredPaper]:
     """就地补上 llm_score、summary_zh、why_zh、tip_zh、topic。失败的批次保持原样，原因记进 errors。
 
-    preset：方向预设（写作人设、方向标签、写法示例），默认机器人。
+    preset：方向预设（写作人设、方向标签、写法示例、语言），默认机器人、中文。
+    字段名里的 _zh 是历史原因，英文版里装的是英文。
     """
     p = preset or get_preset()
     topics = p["topics"]
@@ -168,15 +213,18 @@ def rerank(
     by_id = {sp.paper.id: sp for sp in items}
     batches = [items[i : i + BATCH] for i in range(0, len(items), BATCH)]
 
+    lang = p.get("lang", "zh")
+    labels = BLOCK.get(lang, BLOCK["zh"])
+
     def run(batch: list[ScoredPaper]) -> list[dict[str, Any]]:
-        prompt = PROMPT.format(
-            interests=interests or "（未填写，请按摘要质量判断）",
+        prompt = PROMPTS.get(lang, PROMPT).format(
+            interests=interests or labels["none"],
             n=len(batch),
-            topics="、".join(topics),
+            topics=labels["join"].join(topics),
             ex_summary=p["example"]["summary_zh"],
             ex_why=p["example"]["why_zh"],
             ex_tip=p["example"]["tip_zh"],
-            papers="\n\n".join(_paper_block(sp) for sp in batch),
+            papers="\n\n".join(_paper_block(sp, lang) for sp in batch),
         )
         return parse_json_array(client.complete(prompt, system=system, json_mode=True))
 
@@ -187,9 +235,12 @@ def rerank(
                 _apply(by_id, f.result(), topics)
             except Exception as e:  # 一批失败不影响其他批
                 if errors is not None:
-                    errors.append(
-                        f"{b[0].paper.id} 等 {len(b)} 篇：{type(e).__name__} {str(e)[:150]}"
+                    head = (
+                        f"{b[0].paper.id} and {len(b) - 1} more: "
+                        if lang == "en"
+                        else f"{b[0].paper.id} 等 {len(b)} 篇："
                     )
+                    errors.append(f"{head}{type(e).__name__} {str(e)[:150]}")
     return items
 
 

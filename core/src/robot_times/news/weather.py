@@ -35,10 +35,12 @@ CODES: dict[int, tuple[str, str]] = {
 }  # fmt: skip
 
 
-def geocode(city: str, transport: httpx.BaseTransport | None = None) -> dict[str, Any] | None:
-    """城市名 → {name, lat, lon}；找不到返回 None。"""
+def geocode(
+    city: str, transport: httpx.BaseTransport | None = None, lang: str = "zh"
+) -> dict[str, Any] | None:
+    """城市名 → {name, lat, lon}；找不到返回 None。地名按 lang 的语言返回。"""
     with httpx.Client(transport=transport, timeout=15.0) as http:
-        resp = http.get(GEO_URL, params={"name": city, "count": 1, "language": "zh"})
+        resp = http.get(GEO_URL, params={"name": city, "count": 1, "language": lang})
         resp.raise_for_status()
         hits = resp.json().get("results") or []
     if not hits:
@@ -78,13 +80,17 @@ def fetch_weather(
 
 
 def save_weather(
-    store: Store, day: date, city: str, transport: httpx.BaseTransport | None = None
+    store: Store,
+    day: date,
+    city: str,
+    transport: httpx.BaseTransport | None = None,
+    lang: str = "zh",
 ) -> dict | None:
-    """city 为空就不抓；抓不到就算了，不影响别的。"""
+    """city 为空就不抓；抓不到就算了，不影响别的。天气文字看板按 code 换成界面的语言。"""
     if not city.strip():
         return None
     try:
-        place = geocode(city.strip(), transport=transport)
+        place = geocode(city.strip(), transport=transport, lang=lang)
         if place is None:
             log.warning("找不到这个地点：%s", city)
             return None

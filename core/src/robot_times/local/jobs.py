@@ -19,11 +19,20 @@ from ..cloud import repo
 from ..cloud.daily import RELEASE_HOUR, TZ, generated_after_release
 from ..cloud.store import Store
 from ..cloud.weekly import iso_week
+from ..i18n import current, set_lang
 
 log = logging.getLogger("robot_times.jobs")
 
 KINDS = ("daily", "news", "weekly")
 LABELS = {"daily": "今天的推荐", "news": "业界简报", "weekly": "本周回顾"}
+LABELS_EN = {"daily": "today's picks", "news": "industry brief", "weekly": "weekly review"}
+
+
+def label(kind: str) -> str:
+    """任务名，按当前语言（看板上显示“正在生成……”）。"""
+    return (LABELS_EN if current() == "en" else LABELS).get(kind, "")
+
+
 NEWS_HOUR = 8  # 业界简报几点以后生成（北京时间）
 RETRY_AFTER = timedelta(hours=3)  # 失败或没有新论文时，隔多久再自动试
 
@@ -109,7 +118,7 @@ class Jobs:
         with self._lock:
             return {
                 "running": self._current,
-                "label": LABELS.get(self._current or "", ""),
+                "label": label(self._current or ""),
                 "startedAt": self._started,
                 "queue": [k for k, _ in self._queue],
                 "last": self._last or self._remembered(),
@@ -165,6 +174,10 @@ class Jobs:
                 kind, force = self._queue.pop(0)
                 self._current = kind
                 self._started = self.clock().isoformat(timespec="seconds")
+            try:  # 失败原因和办法按设置的语言写（会存下来，重启后还显示）
+                set_lang(repo.load_settings(self.store).get("lang"))
+            except Exception:
+                set_lang("zh")
             log.info("开始：%s", LABELS[kind])
             result: dict[str, Any] = {"kind": kind, "ok": True, "message": ""}
             waiting = False

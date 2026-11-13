@@ -110,10 +110,11 @@ def recommend(
 # 大模型没看过的论文（排在精排范围外）按标题和摘要的关键词补一个方向，免得绕过“每个方向最多几篇”
 def guess_topic(paper: Paper, preset: dict[str, Any] | None = None) -> str:
     text = f"{paper.title} {paper.abstract[:600]}".lower()
-    for topic, pattern in (preset or get_preset())["topic_words"]:
+    p = preset or get_preset()
+    for topic, pattern in p["topic_words"]:
         if re.search(pattern, text):
             return topic
-    return "其他"
+    return p["topics"][-1]  # 最后一个是“其他”
 
 
 def diversify(

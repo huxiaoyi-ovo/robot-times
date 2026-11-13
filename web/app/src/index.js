@@ -14,7 +14,7 @@
 //   GITHUB_TOKEN        “立即生成”按钮用，只需本仓库 Actions 写权限（机密，可选）
 //   DEV_NO_AUTH=1       只在本地 wrangler dev 时用（写在 .dev.vars），线上不要设
 
-import { DEFAULT_PRESET, PRESETS, VERSION, presetFor, styleFor } from "./presets.js";
+import { DEFAULT_PRESET, PRESETS, VERSION, langOf, presetFor, styleFor } from "./presets.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const STATUSES = new Set(["todo", "reading", "done", "skip"]);
@@ -27,6 +27,13 @@ class HttpError extends Error {
   }
 }
 
+// 报错和提示的语言：页面每个请求都带 X-Lang（zh 或 en）。看板只给一个人用（Access 只放行一个邮箱），
+// 同时进来的请求语言都一样，所以放在模块变量里，不用一层层传；定时任务按设置里的语言。
+// 生成的内容（Zotero 笔记、问 AI）按设置里的语言，和 Python 那边一样。
+let LANG = "zh";
+export const setLang = (v) => (LANG = langOf(v));
+const L = (zh, en) => (LANG === "en" ? en : zh);
+
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const nowIso = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
 
@@ -34,6 +41,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    setLang(request.headers.get("x-lang"));
     try {
       const who = await authorize(request, env);
       return await route(request, env, url, who);
@@ -41,7 +49,7 @@ export default {
       // 报错带上办法（hint、actions），页面上显示成按钮；和本地版 core/src/robot_times/local/diagnose.py 一样的字段
       if (e instanceof HttpError) return json({ error: e.message, hint: "", actions: ["doctor"] }, e.status);
       console.error(e);
-      return json({ error: `出错了：${String(e?.message || e).slice(0, 200)}`, hint: "先点“体检”看看哪里没配好；还不行就复制诊断信息去报告问题。", actions: ["doctor"] }, 500);
+      return json({ error: L("出错了：", "Something went wrong: ") + String(e?.message || e).slice(0, 200), hint: L("先点“体检”看看哪里没配好；还不行就复制诊断信息去报告问题。", "Run the check-up first to see what isn't set up; if that doesn't help, copy the diagnostics into a bug report."), actions: ["doctor"] }, 500);
     }
   },
   // 定时任务（每 30 分钟）：每 3 小时代抓一次拒绝 GitHub 服务器的订阅（如 *.substack.com），存进 D1 给业界简报用；
@@ -50,6 +58,7 @@ export default {
     const t = new Date(event.scheduledTime || Date.now());
     ctx.waitUntil(
       (async () => {
+        setLang((await loadSettings(env).catch(() => ({}))).lang);
         if (t.getUTCHours() % 3 === 0 && t.getUTCMinutes() < 30) await refreshFeedCache(env).catch((e) => console.error("feeds", e));
         await autoRun(env, t).catch((e) => console.error("autoRun", e));
       })(),
@@ -104,7 +113,7 @@ function b64urlBytes(s) {
 async function accessKeys(team, force = false) {
   if (!force && Date.now() - jwksCache.at < 3600_000 && jwksCache.keys.length) return jwksCache.keys;
   const resp = await fetch(`https://${team}/cdn-cgi/access/certs`);
-  if (!resp.ok) throw new HttpError(503, `暂时拿不到 Cloudflare Access 的公钥（${team} 返回 HTTP ${resp.status}），稍后再试。`);
+  if (!resp.ok) throw new HttpError(503, L(`暂时拿不到 Cloudflare Access 的公钥（${team} 返回 HTTP ${resp.status}），稍后再试。`, `Can't get the Cloudflare Access public keys right now (${team} returned HTTP ${resp.status}); try again later.`));
   jwksCache = { at: Date.now(), keys: (await resp.json()).keys || [] };
   return jwksCache.keys;
 }
@@ -115,7 +124,7 @@ const hostOf = (v) => String(v || "").trim().toLowerCase().replace(/^https?:\/\/
 async function authorize(request, env) {
   if (env.DEV_NO_AUTH === "1") return { email: "dev@localhost" };
   if (!env.ACCESS_AUD || !env.ALLOWED_EMAIL) {
-    throw new HttpError(403, "看板还没开启登录保护：请按 docs/dev/cloud-setup.md 开启 Cloudflare Access，并设置 ACCESS_AUD 和 ALLOWED_EMAIL。");
+    throw new HttpError(403, L("看板还没开启登录保护：请按 docs/dev/cloud-setup.md 开启 Cloudflare Access，并设置 ACCESS_AUD 和 ALLOWED_EMAIL。", "Login protection isn't on yet: turn on Cloudflare Access as described in docs/dev/cloud-setup.md and set ACCESS_AUD and ALLOWED_EMAIL."));
   }
   // Access 通常把凭证放在请求头里；有时只有浏览器带上的 CF_Authorization cookie，两者内容相同，一样校验签名
   const cookie = (request.headers.get("cookie") || "").match(/(?:^|;\s*)CF_Authorization=([^;]+)/);
@@ -123,12 +132,16 @@ async function authorize(request, env) {
   if (!token) {
     throw new HttpError(
       403,
-      "没有登录凭证：看起来 Cloudflare Access 还没生效。正常情况下，打开看板时会先跳到 Cloudflare 的登录页。" +
-        "请到 Cloudflare 里看板的 Worker → Access 确认范围是 All traffic，然后关掉页面重新打开。",
+      L(
+        "没有登录凭证：看起来 Cloudflare Access 还没生效。正常情况下，打开看板时会先跳到 Cloudflare 的登录页。" +
+          "请到 Cloudflare 里看板的 Worker → Access 确认范围是 All traffic，然后关掉页面重新打开。",
+        "No login credential: Cloudflare Access doesn't seem to be active. Normally opening the dashboard first goes to the Cloudflare login page. " +
+          "In Cloudflare, check the dashboard Worker → Access covers All traffic, then close the page and open it again.",
+      ),
     );
   }
   const parts = token.split(".");
-  const invalid = () => new HttpError(403, "登录凭证无效，请刷新页面重新登录。");
+  const invalid = () => new HttpError(403, L("登录凭证无效，请刷新页面重新登录。", "Invalid login credential; refresh the page and log in again."));
   if (parts.length !== 3) throw invalid();
   const dec = (s) => JSON.parse(new TextDecoder().decode(b64urlBytes(s)));
   let header, payload;
@@ -143,7 +156,7 @@ async function authorize(request, env) {
   if (!TEAM_RE.test(team) || payload.iss !== `https://${team}`) throw invalid();
   const configured = hostOf(env.ACCESS_TEAM_DOMAIN);
   if (configured && configured !== team) {
-    throw new HttpError(403, `ACCESS_TEAM_DOMAIN 填的是 ${configured}，但你的团队域名是 ${team}。改成后者，或者直接删掉这个变量。`);
+    throw new HttpError(403, L(`ACCESS_TEAM_DOMAIN 填的是 ${configured}，但你的团队域名是 ${team}。改成后者，或者直接删掉这个变量。`, `ACCESS_TEAM_DOMAIN is ${configured}, but your team domain is ${team}. Change it to the latter, or just delete the variable.`));
   }
   let jwk = (await accessKeys(team)).find((k) => k.kid === header.kid);
   if (!jwk) jwk = (await accessKeys(team, true)).find((k) => k.kid === header.kid); // 公钥轮换
@@ -158,12 +171,12 @@ async function authorize(request, env) {
   if (!ok) throw invalid();
   const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (!aud.includes(String(env.ACCESS_AUD).trim())) {
-    throw new HttpError(403, "ACCESS_AUD 和这个 Access 应用对不上：到 Cloudflare 里看板的 Worker → Access 页面右下角复制 AUD tag，重新填一次。");
+    throw new HttpError(403, L("ACCESS_AUD 和这个 Access 应用对不上：到 Cloudflare 里看板的 Worker → Access 页面右下角复制 AUD tag，重新填一次。", "ACCESS_AUD doesn't match this Access application: copy the AUD tag from the bottom right of the dashboard Worker → Access page in Cloudflare and set it again."));
   }
-  if (!(payload.exp > Date.now() / 1000)) throw new HttpError(403, "登录已过期，请刷新页面重新登录。");
+  if (!(payload.exp > Date.now() / 1000)) throw new HttpError(403, L("登录已过期，请刷新页面重新登录。", "Login expired; refresh the page and log in again."));
   const email = String(payload.email || "").toLowerCase();
   if (email !== String(env.ALLOWED_EMAIL).trim().toLowerCase()) {
-    throw new HttpError(403, `${email || "这个账号"} 没有访问权限（ALLOWED_EMAIL 填的是别的邮箱）。`);
+    throw new HttpError(403, L(`${email || "这个账号"} 没有访问权限（ALLOWED_EMAIL 填的是别的邮箱）。`, `${email || "This account"} has no access (ALLOWED_EMAIL is set to a different address).`));
   }
   return { email };
 }
@@ -190,18 +203,18 @@ async function route(request, env, url, who) {
   if (m === "GET" && p === "/api/job") return json(await jobStatus(env));
   if (m === "GET" && p === "/api/doctor") return json(await doctor(env, who));
   if (m === "GET" && p === "/api/report") return json({ text: report(await doctor(env, who)), issues: ISSUES });
-  if (m === "GET" && p === "/api/export") throw new HttpError(404, "云端版的数据在 Cloudflare D1 里：在 Cloudflare 后台的 D1 页面可以导出。");
-  if (m === "GET" && p === "/api/logs") throw new HttpError(404, "云端版的日志在 GitHub 仓库的 Actions 页面：点开对应的任务就能看到每一步的输出。");
-  throw new HttpError(404, "没有这个接口。");
+  if (m === "GET" && p === "/api/export") throw new HttpError(404, L("云端版的数据在 Cloudflare D1 里：在 Cloudflare 后台的 D1 页面可以导出。", "The cloud version's data lives in Cloudflare D1: export it from the D1 page in the Cloudflare dashboard."));
+  if (m === "GET" && p === "/api/logs") throw new HttpError(404, L("云端版的日志在 GitHub 仓库的 Actions 页面：点开对应的任务就能看到每一步的输出。", "The cloud version's logs are on your GitHub repo's Actions page: open a run to see each step's output."));
+  throw new HttpError(404, L("没有这个接口。", "No such endpoint."));
 }
 
 async function body(request) {
   const text = await request.text();
-  if (text.length > 200_000) throw new HttpError(413, "内容太长了。");
+  if (text.length > 200_000) throw new HttpError(413, L("内容太长了。", "Too long."));
   try {
     return text ? JSON.parse(text) : {};
   } catch {
-    throw new HttpError(400, "请求格式不对。");
+    throw new HttpError(400, L("请求格式不对。", "Bad request format."));
   }
 }
 
@@ -210,6 +223,7 @@ async function body(request) {
 // 和研究方向有关的（报名、写作人设、默认 arXiv 分类、新闻来源）在方向预设里，见 presets.js
 const DEFAULT_SETTINGS = {
   preset: DEFAULT_PRESET,
+  lang: "zh",
   siteName: "",
   field: "",
   weatherCity: "",
@@ -306,7 +320,7 @@ async function bootstrap(env, who) {
 async function searchPapers(env, q) {
   const text = (q.get("q") || "").trim().slice(0, 100);
   const status = q.get("status") || "";
-  if (status && !STATUSES.has(status)) throw new HttpError(400, "状态不对。");
+  if (status && !STATUSES.has(status)) throw new HttpError(400, L("状态不对。", "Invalid status."));
   const limit = Math.min(100, Math.max(1, Number(q.get("limit")) || 50));
   const offset = Math.max(0, Number(q.get("offset")) || 0);
   const like = `%${text.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
@@ -320,22 +334,22 @@ async function searchPapers(env, q) {
 
 async function getNews(env, date) {
   const r = await env.DB.prepare("select data from news where date = ?").bind(date).first();
-  if (!r) throw new HttpError(404, "这一天没有业界简报。");
+  if (!r) throw new HttpError(404, L("这一天没有业界简报。", "No industry brief for this day."));
   return JSON.parse(r.data);
 }
 
 async function getPaper(env, id) {
   const r = await env.DB.prepare("select data from papers where id = ?").bind(id).first();
-  if (!r) throw new HttpError(404, "找不到这篇论文。");
+  if (!r) throw new HttpError(404, L("找不到这篇论文。", "Paper not found."));
   return JSON.parse(r.data);
 }
 
 async function saveNote(env, id, b) {
   await getPaper(env, id);
   const status = b.status ?? "todo";
-  if (!STATUSES.has(status)) throw new HttpError(400, "阅读状态不对。");
+  if (!STATUSES.has(status)) throw new HttpError(400, L("阅读状态不对。", "Invalid reading status."));
   const note = String(b.note ?? "");
-  if (note.length > 50_000) throw new HttpError(413, "笔记太长了，拆成几段吧。");
+  if (note.length > 50_000) throw new HttpError(413, L("笔记太长了，拆成几段吧。", "The note is too long; split it up."));
   const flags = Array.isArray(b.flags) ? b.flags.map(String).slice(0, 12) : [];
   const at = nowIso();
   await env.DB.prepare(
@@ -350,7 +364,7 @@ async function saveNote(env, id, b) {
 async function feedback(env, id, b) {
   await getPaper(env, id);
   const action = b.action;
-  if (!["like", "skip", "clear"].includes(action)) throw new HttpError(400, "反馈类型不对。");
+  if (!["like", "skip", "clear"].includes(action)) throw new HttpError(400, L("反馈类型不对。", "Invalid feedback type."));
   // 每篇只保留最后一次喜欢/跳过；“加入 Zotero”单独记
   const stmts = [env.DB.prepare("delete from feedback where paper_id = ? and action in ('like', 'skip')").bind(id)];
   if (action !== "clear") stmts.push(env.DB.prepare("insert into feedback (paper_id, action, at) values (?, ?, ?)").bind(id, action, nowIso()));
@@ -371,7 +385,10 @@ export function siteInfo(settings) {
   return {
     name: p.site_name,
     field: p.field,
-    presets: Object.entries(PRESETS).map(([id, x]) => ({ id, label: x.label, siteName: x.site_name, field: x.field })),
+    presets: Object.keys(PRESETS).map((id) => {
+      const x = presetFor({ preset: id, lang: p.lang });
+      return { id, label: x.label, siteName: x.site_name, field: x.field };
+    }),
   };
 }
 
@@ -380,7 +397,7 @@ async function saveSettings(env, b) {
   if (b.categories !== undefined) {
     const cats = (Array.isArray(b.categories) ? b.categories : []).map((c) => String(c).trim()).filter(Boolean);
     if (!cats.length || cats.length > 12 || !cats.every((c) => /^[a-z-]+(\.[A-Za-z-]+)?$/.test(c))) {
-      throw new HttpError(400, "arXiv 分类写法不对，例如 cs.RO、cs.LG、eess.SY。");
+      throw new HttpError(400, L("arXiv 分类写法不对，例如 cs.RO、cs.LG、eess.SY。", "arXiv categories look wrong; examples: cs.RO, cs.LG, eess.SY."));
     }
     s.categories = cats;
   }
@@ -389,22 +406,26 @@ async function saveSettings(env, b) {
     const w = {};
     for (const k of ["relevance", "impact", "buzz"]) {
       const v = Number(b.weights[k]);
-      if (!(v >= 0 && v <= 1)) throw new HttpError(400, "权重要在 0 到 1 之间。");
+      if (!(v >= 0 && v <= 1)) throw new HttpError(400, L("权重要在 0 到 1 之间。", "Weights must be between 0 and 1."));
       w[k] = Math.round(v * 100) / 100;
     }
-    if (w.relevance + w.impact + w.buzz <= 0) throw new HttpError(400, "三个权重不能都是 0。");
+    if (w.relevance + w.impact + w.buzz <= 0) throw new HttpError(400, L("三个权重不能都是 0。", "The three weights can't all be 0."));
     s.weights = w;
   }
   if (b.dailyMinutes !== undefined) s.dailyMinutes = Math.max(15, Math.min(240, Math.round(Number(b.dailyMinutes) || 60)));
   if (b.top !== undefined) s.top = Math.max(3, Math.min(30, Math.round(Number(b.top) || 12)));
   if (b.diversity !== undefined) {
     const v = Number(b.diversity);
-    if (!(v >= 0 && v <= 1)) throw new HttpError(400, "多样性要在 0 到 1 之间。");
+    if (!(v >= 0 && v <= 1)) throw new HttpError(400, L("多样性要在 0 到 1 之间。", "Diversity must be between 0 and 1."));
     s.diversity = Math.round(v * 100) / 100;
   }
   if (b.preset !== undefined) {
-    if (!PRESETS[b.preset]) throw new HttpError(400, "没有这个方向预设。");
+    if (!PRESETS[b.preset]) throw new HttpError(400, L("没有这个方向预设。", "Unknown field preset."));
     s.preset = b.preset;
+  }
+  if (b.lang !== undefined && b.lang !== null) {
+    if (!["zh", "en"].includes(b.lang)) throw new HttpError(400, L("语言只能是 zh 或 en。", "Language must be zh or en."));
+    s.lang = b.lang;
   }
   if (b.siteName !== undefined) s.siteName = String(b.siteName).trim().slice(0, 60);
   if (b.field !== undefined) s.field = String(b.field).trim().slice(0, 40);
@@ -414,9 +435,9 @@ async function saveSettings(env, b) {
   if (b.tag !== undefined) s.tag = String(b.tag).trim().slice(0, 40) || "Robot Times";
   if (b.newsFeeds !== undefined) {
     const feeds = (Array.isArray(b.newsFeeds) ? b.newsFeeds : []).map((u) => String(u).trim()).filter(Boolean);
-    if (feeds.length > 30) throw new HttpError(400, "订阅最多 30 个。");
+    if (feeds.length > 30) throw new HttpError(400, L("订阅最多 30 个。", "At most 30 feeds."));
     const bad = feeds.find((u) => !/^https?:\/\/[^\s/]+\.[^\s]+$/.test(u));
-    if (bad) throw new HttpError(400, `这个不像 RSS 地址：${bad}`);
+    if (bad) throw new HttpError(400, L("这个不像 RSS 地址：", "This doesn't look like an RSS URL: ") + bad);
     s.newsFeeds = feeds;
   }
   await env.DB.prepare("insert into config (key, value) values ('settings', ?) on conflict(key) do update set value = excluded.value")
@@ -451,19 +472,22 @@ export function paperToItem(p, tag) {
   };
 }
 
-export function noteHtml(p, myNote) {
-  const parts = ["<h2>The Robot Times 摘要</h2>"];
+export function noteHtml(p, myNote, lang = "zh") {
+  const en = lang === "en";
+  const T = (zh, e) => (en ? e : zh);
+  const parts = [T("<h2>The Robot Times 摘要</h2>", "<h2>The Robot Times summary</h2>")];
   if (p.titleZh) parts.push(`<p><b>${esc(p.titleZh)}</b></p>`);
   // 解读分了段（做了什么 / 判断 / 对你）：每段一个 <p>，不然换行在笔记里会被吞掉；和 core 的 note_html 一致
   const review = String(p.analysis?.review || "").split("\n").map((x) => x.trim()).filter(Boolean);
-  if (review.length) parts.push(`<p><b>解读：</b>${esc(review[0])}</p>` + review.slice(1).map((x) => `<p>${esc(x)}</p>`).join(""));
+  if (review.length) parts.push(`<p><b>${T("解读：", "Review: ")}</b>${esc(review[0])}</p>` + review.slice(1).map((x) => `<p>${esc(x)}</p>`).join(""));
   if (p.summary) parts.push(`<p>${esc(p.summary)}</p>`);
-  if (p.why) parts.push(`<p><b>为什么推荐：</b>${esc(p.why)}</p>`);
-  if (p.tip) parts.push(`<p><b>怎么读：</b>${esc(p.tip)}</p>`);
+  if (p.why) parts.push(`<p><b>${T("为什么推荐：", "Why it was picked: ")}</b>${esc(p.why)}</p>`);
+  if (p.tip) parts.push(`<p><b>${T("怎么读：", "How to read it: ")}</b>${esc(p.tip)}</p>`);
   const s = p.scores || {};
-  parts.push(`<p><i>综合分 ${Number(s.total || 0).toFixed(1)} · 相关 ${s.rel ?? "-"} · 影响 ${s.impact ?? "-"} · 热度 ${s.buzz ?? "-"}</i></p>`);
+  const [t, rel, imp, buzz] = [Number(s.total || 0).toFixed(1), s.rel ?? "-", s.impact ?? "-", s.buzz ?? "-"];
+  parts.push(en ? `<p><i>Score ${t} · relevance ${rel} · impact ${imp} · buzz ${buzz}</i></p>` : `<p><i>综合分 ${t} · 相关 ${rel} · 影响 ${imp} · 热度 ${buzz}</i></p>`);
   if (myNote && myNote.trim()) {
-    parts.push("<h2>我的笔记</h2>", ...myNote.trim().split(/\n{2,}/).map((para) => `<p>${esc(para).replace(/\n/g, "<br>")}</p>`));
+    parts.push(T("<h2>我的笔记</h2>", "<h2>My notes</h2>"), ...myNote.trim().split(/\n{2,}/).map((para) => `<p>${esc(para).replace(/\n/g, "<br>")}</p>`));
   }
   return parts.join("");
 }
@@ -484,25 +508,25 @@ async function zoteroWrite(env, items) {
     headers: zHeaders(env, { "Zotero-Write-Token": writeToken(), "content-type": "application/json" }),
     body: JSON.stringify(items),
   });
-  if (resp.status === 403) throw new HttpError(502, "Zotero 拒绝写入：检查 ZOTERO_API_KEY 是否勾选了写权限，ZOTERO_USER_ID 是否正确。");
-  if (resp.status === 429 || resp.status === 503) throw new HttpError(503, "Zotero 现在很忙，过一分钟再试。");
-  if (!resp.ok) throw new HttpError(502, `Zotero 写入失败：HTTP ${resp.status}`);
+  if (resp.status === 403) throw new HttpError(502, L("Zotero 拒绝写入：检查 ZOTERO_API_KEY 是否勾选了写权限，ZOTERO_USER_ID 是否正确。", "Zotero refused the write: check that ZOTERO_API_KEY has write access and ZOTERO_USER_ID is right."));
+  if (resp.status === 429 || resp.status === 503) throw new HttpError(503, L("Zotero 现在很忙，过一分钟再试。", "Zotero is busy right now; try again in a minute."));
+  if (!resp.ok) throw new HttpError(502, L("Zotero 写入失败：HTTP ", "Writing to Zotero failed: HTTP ") + resp.status);
   const r = await resp.json();
   const key = r.success?.["0"] || r.successful?.["0"]?.key;
-  if (!key) throw new HttpError(502, `Zotero 没有接受这个条目：${r.failed?.["0"]?.message || "原因未知"}`);
+  if (!key) throw new HttpError(502, L("Zotero 没有接受这个条目：", "Zotero didn't accept the item: ") + (r.failed?.["0"]?.message || L("原因未知", "unknown reason")));
   return key;
 }
 
 function needZotero(env) {
-  if (!env.ZOTERO_USER_ID || !env.ZOTERO_API_KEY) throw new HttpError(400, "还没配置 Zotero：在 Cloudflare 后台给看板的 Worker 加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY。");
+  if (!env.ZOTERO_USER_ID || !env.ZOTERO_API_KEY) throw new HttpError(400, L("还没配置 Zotero：在 Cloudflare 后台给看板的 Worker 加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY。", "Zotero isn't set up: add ZOTERO_USER_ID and ZOTERO_API_KEY to the dashboard Worker in Cloudflare."));
 }
 
 // 读 Zotero 里的这个条目：不存在或在回收站里返回 null
 async function zoteroItem(env, key) {
   const resp = await fetch(zUrl(env, `/items/${encodeURIComponent(key)}`), { headers: zHeaders(env) });
   if (resp.status === 404) return null;
-  if (resp.status === 403) throw new HttpError(502, "Zotero 拒绝读取：检查 ZOTERO_API_KEY 和 ZOTERO_USER_ID。");
-  if (!resp.ok) throw new HttpError(502, `读 Zotero 失败：HTTP ${resp.status}`);
+  if (resp.status === 403) throw new HttpError(502, L("Zotero 拒绝读取：检查 ZOTERO_API_KEY 和 ZOTERO_USER_ID。", "Zotero refused the read: check ZOTERO_API_KEY and ZOTERO_USER_ID."));
+  if (!resp.ok) throw new HttpError(502, L("读 Zotero 失败：HTTP ", "Reading Zotero failed: HTTP ") + resp.status);
   const item = await resp.json();
   return item?.data?.deleted ? null : item;
 }
@@ -511,13 +535,13 @@ async function zoteroItem(env, key) {
 async function findCollection(env, name) {
   for (let start = 0; start < 1000; start += 100) {
     const resp = await fetch(zUrl(env, `/collections?limit=100&start=${start}`), { headers: zHeaders(env) });
-    if (!resp.ok) throw new HttpError(502, `读 Zotero 文件夹失败：HTTP ${resp.status}`);
+    if (!resp.ok) throw new HttpError(502, L("读 Zotero 文件夹失败：HTTP ", "Reading Zotero collections failed: HTTP ") + resp.status);
     const rows = await resp.json();
     const hit = rows.find((c) => String(c.data?.name || "").trim() === name);
     if (hit) return hit.key;
     if (rows.length < 100) break;
   }
-  throw new HttpError(400, `Zotero 里找不到名为“${name}”的文件夹。先在 Zotero 里建好，或者到“设置”里改成已有的文件夹名。`);
+  throw new HttpError(400, L(`Zotero 里找不到名为“${name}”的文件夹。先在 Zotero 里建好，或者到“设置”里改成已有的文件夹名。`, `There is no collection named “${name}” in Zotero. Create it in Zotero first, or change it to an existing collection in Settings.`));
 }
 
 // ---- WebDAV：Zotero 用 WebDAV 同步附件时，文件在 <WebDAV 地址>/zotero/<附件编号>.zip，旁边一个 .prop 记修改时间和 MD5 ----
@@ -572,9 +596,9 @@ export function makeZip(name, bytes, date = new Date()) {
 
 async function davPut(dav, path, body, type) {
   const resp = await fetch(dav.base + path, { method: "PUT", headers: { authorization: dav.auth, "content-type": type }, body });
-  if (resp.status === 401) throw new Error("WebDAV 账号或密码不对（坚果云要用“应用密码”）");
-  if (resp.status === 404 || resp.status === 409) throw new Error(`WebDAV 上找不到 zotero 文件夹（${dav.base}），检查 WEBDAV_URL 是否和 Zotero 里填的一样`);
-  if (!resp.ok) throw new Error(`写入 WebDAV 失败：HTTP ${resp.status}`);
+  if (resp.status === 401) throw new Error(L("WebDAV 账号或密码不对（坚果云要用“应用密码”）", "Wrong WebDAV user or password (some providers need an app password)"));
+  if (resp.status === 404 || resp.status === 409) throw new Error(L(`WebDAV 上找不到 zotero 文件夹（${dav.base}），检查 WEBDAV_URL 是否和 Zotero 里填的一样`, `No zotero folder on WebDAV (${dav.base}); check WEBDAV_URL matches what Zotero uses`));
+  if (!resp.ok) throw new Error(L("写入 WebDAV 失败：HTTP ", "Writing to WebDAV failed: HTTP ") + resp.status);
 }
 
 async function davHas(dav, key) {
@@ -601,7 +625,7 @@ async function addToCollection(env, item, colKey) {
     headers: zHeaders(env, { "If-Unmodified-Since-Version": String(item.version), "content-type": "application/json" }),
     body: JSON.stringify({ collections: [...cols, colKey] }),
   });
-  if (!resp.ok && resp.status !== 204) throw new HttpError(502, `放进文件夹失败：HTTP ${resp.status}`);
+  if (!resp.ok && resp.status !== 204) throw new HttpError(502, L("放进文件夹失败：HTTP ", "Adding to the collection failed: HTTP ") + resp.status);
 }
 
 const MAX_PDF = 40 * 1024 * 1024;
@@ -622,14 +646,14 @@ async function attachPdf(env, parentKey, p) {
       .bind(JSON.stringify({ at: nowIso(), paper: p.id, parent: parentKey, steps: log, result: msg || "ok" })).run().catch(() => {});
     return msg;
   };
-  if (!p.pdf) return done("这篇没有 PDF 地址");
+  if (!p.pdf) return done(L("这篇没有 PDF 地址", "this paper has no PDF link"));
   const pdf = await fetch(p.pdf, { headers: { "user-agent": "robot-times/0.1 (personal Zotero import)", accept: "application/pdf" }, redirect: "follow" });
   log.push(`下载 ${p.pdf}：HTTP ${pdf.status} ${pdf.headers.get("content-type") || ""}`);
-  if (!pdf.ok) return done(`下载 PDF 失败（HTTP ${pdf.status}）`);
-  if (!/pdf/i.test(pdf.headers.get("content-type") || "")) return done("下载到的不是 PDF");
+  if (!pdf.ok) return done(L(`下载 PDF 失败（HTTP ${pdf.status}）`, `PDF download failed (HTTP ${pdf.status})`));
+  if (!/pdf/i.test(pdf.headers.get("content-type") || "")) return done(L("下载到的不是 PDF", "the download wasn't a PDF"));
   const bytes = new Uint8Array(await pdf.arrayBuffer());
   log.push(`大小 ${bytes.length}`);
-  if (bytes.length > MAX_PDF) return done("PDF 超过 40 MB，没有上传");
+  if (bytes.length > MAX_PDF) return done(L("PDF 超过 40 MB，没有上传", "the PDF is over 40 MB, not uploaded"));
   const filename = `${String(p.id).replace(/[^\w.-]+/g, "_")}.pdf`;
   // 以前传失败留下的空附件就接着用，不再新建一个
   const old = await pdfAttachment(env, parentKey);
@@ -650,7 +674,7 @@ async function attachPdf(env, parentKey, p) {
       log.push(`WebDAV：写入 ${attKey}.prop`);
     } catch (e) {
       log.push(String(e.message || e));
-      return done(e.message || "写入 WebDAV 失败");
+      return done(e.message || L("写入 WebDAV 失败", "writing to WebDAV failed"));
     }
     const att = await zoteroItem(env, attKey);
     if (att) {
@@ -668,8 +692,8 @@ async function attachPdf(env, parentKey, p) {
   const auth = await fetch(fileUrl, { method: "POST", headers: formHeaders, body: form({ md5, filename, filesize: bytes.length, mtime: Date.now() }) });
   const authText = await auth.text();
   log.push(`申请上传：HTTP ${auth.status} ${authText.slice(0, 200)}`);
-  if (auth.status === 413) return done("Zotero 的存储空间满了，PDF 没有上传（条目已加入）");
-  if (!auth.ok) return done(`Zotero 不让上传 PDF（HTTP ${auth.status}：${authText.slice(0, 120)}）`);
+  if (auth.status === 413) return done(L("Zotero 的存储空间满了，PDF 没有上传（条目已加入）", "Zotero storage is full, so the PDF wasn't uploaded (the item was added)"));
+  if (!auth.ok) return done(L(`Zotero 不让上传 PDF（HTTP ${auth.status}：${authText.slice(0, 120)}）`, `Zotero refused the PDF upload (HTTP ${auth.status}: ${authText.slice(0, 120)})`));
   const a = JSON.parse(authText);
   if (a.exists) return done(null); // Zotero 里已经有一模一样的文件
   const enc = new TextEncoder();
@@ -679,11 +703,11 @@ async function attachPdf(env, parentKey, p) {
   const up = await fetch(a.url, { method: "POST", headers: { "content-type": a.contentType }, body });
   const upText = up.ok ? "" : (await up.text()).slice(0, 200);
   log.push(`上传：HTTP ${up.status} ${upText}`);
-  if (up.status !== 201 && !up.ok) return done(`上传 PDF 失败（HTTP ${up.status}）`);
+  if (up.status !== 201 && !up.ok) return done(L(`上传 PDF 失败（HTTP ${up.status}）`, `PDF upload failed (HTTP ${up.status})`));
   const reg = await fetch(fileUrl, { method: "POST", headers: formHeaders, body: form({ upload: a.uploadKey }) });
   const regText = reg.status === 204 ? "" : (await reg.text()).slice(0, 200);
   log.push(`登记：HTTP ${reg.status} ${regText}`);
-  if (reg.status !== 204 && !reg.ok) return done(`登记 PDF 失败（HTTP ${reg.status}：${regText.slice(0, 120)}）`);
+  if (reg.status !== 204 && !reg.ok) return done(L(`登记 PDF 失败（HTTP ${reg.status}：${regText.slice(0, 120)}）`, `Registering the PDF failed (HTTP ${reg.status}: ${regText.slice(0, 120)})`));
   return done(null);
 }
 
@@ -723,9 +747,9 @@ async function removeFromZotero(env, id) {
         headers: zHeaders(env, { "If-Unmodified-Since-Version": String(item.version), "content-type": "application/json" }),
         body: JSON.stringify({ deleted: 1 }),
       });
-      if (resp.status === 412) throw new HttpError(409, "这个条目刚在 Zotero 里改过，请再点一次。");
-      if (resp.status === 403) throw new HttpError(502, "Zotero 拒绝修改：检查 ZOTERO_API_KEY 是否有写权限。");
-      if (!resp.ok && resp.status !== 204) throw new HttpError(502, `从 Zotero 移除失败：HTTP ${resp.status}`);
+      if (resp.status === 412) throw new HttpError(409, L("这个条目刚在 Zotero 里改过，请再点一次。", "This item was just changed in Zotero; click again."));
+      if (resp.status === 403) throw new HttpError(502, L("Zotero 拒绝修改：检查 ZOTERO_API_KEY 是否有写权限。", "Zotero refused the change: check ZOTERO_API_KEY has write access."));
+      if (!resp.ok && resp.status !== 204) throw new HttpError(502, L("从 Zotero 移除失败：HTTP ", "Removing from Zotero failed: HTTP ") + resp.status);
     }
   }
   await env.DB.batch([
@@ -762,10 +786,10 @@ async function addToZotero(env, id) {
     env.DB.prepare("insert into zotero_items (paper_id, item_key, at) values (?, ?, ?) on conflict(paper_id) do nothing").bind(id, key, at),
     env.DB.prepare("insert into feedback (paper_id, action, at) values (?, 'add', ?)").bind(id, at),
   ]);
-  const pdfError = pdfMode(env) === "none" ? null : await attachPdf(env, key, p).catch((e) => e.message || "PDF 没加上");
+  const pdfError = pdfMode(env) === "none" ? null : await attachPdf(env, key, p).catch((e) => e.message || L("PDF 没加上", "the PDF wasn't added"));
   let noteError = null;
   try {
-    await zoteroWrite(env, [{ itemType: "note", parentItem: key, note: noteHtml(p, note?.note || ""), tags: [{ tag }] }]);
+    await zoteroWrite(env, [{ itemType: "note", parentItem: key, note: noteHtml(p, note?.note || "", langOf(settings.lang)), tags: [{ tag }] }]);
   } catch (e) {
     noteError = e.message; // 条目已经写进去了，笔记失败不算整体失败
   }
@@ -776,7 +800,8 @@ async function addToZotero(env, id) {
 
 
 
-export function askPrompt(p, interests, kind, question, context, myNote) {
+export function askPrompt(p, interests, kind, question, context, myNote, lang = "zh") {
+  if (lang === "en") return askPromptEn(p, interests, kind, question, context, myNote);
   const head =
     `他的研究兴趣：${interests || "（未填写）"}\n\n` +
     `论文：${p.title}\n作者：${(p.authors || []).join(", ")}\n发表：${p.venue || ""}\n` +
@@ -802,23 +827,52 @@ export function askPrompt(p, interests, kind, question, context, myNote) {
   );
 }
 
+// 英文版，和 core/src/robot_times/local/api.py 的 _ask_prompt_en 一样
+function askPromptEn(p, interests, kind, question, context, myNote) {
+  const head =
+    `Their research interests: ${interests || "(not given)"}\n\n` +
+    `Paper: ${p.title}\nAuthors: ${(p.authors || []).join(", ")}\nPublished: ${p.venue || ""}\n` +
+    (p.comment ? `Author comments: ${p.comment}\n` : "") +
+    `Abstract: ${p.abstract || ""}\n` +
+    (p.summary ? `Gist: ${p.summary}\n` : "") +
+    ((p.related || []).length ? `Closest in their library: ${p.related.map((t) => `"${t}"`).join("; ")}\n` : "") +
+    (context ? `\nPassage they pasted from the paper:\n"""\n${context}\n"""\n` : "");
+  if (kind === "check") {
+    return (
+      `${head}\nTheir own notes:\n"""\n${myNote || "(empty)"}\n"""\n\n` +
+      "Check these notes and give feedback on the three points below, a sentence or two each, quoting the exact sentence:\n" +
+      "1. Are the problem, core idea and key result stated clearly?\n" +
+      "2. Any misunderstanding (compare against the abstract and the pasted passage)?\n" +
+      "3. One sentence they could add to connect it to related work or their own research.\n" +
+      "Finish with a rewritten 3–5 sentence version: keep their own views and wording, and don't add judgments " +
+      "they haven't made."
+    );
+  }
+  return (
+    `${head}\nTheir question: ${question || "What is the one idea most worth taking away from this paper, and what is its main limitation?"}\n\n` +
+    "How to answer: answer directly in the first sentence. Then give the evidence, saying whether it comes from " +
+    "the abstract or the passage they pasted. Where you're unsure, say which part of the paper would settle it. " +
+    "Usually no more than 150 words; go longer only if the question needs it."
+  );
+}
+
 async function ask(env, b) {
-  if (!env.DEEPSEEK_API_KEY) throw new HttpError(400, "还没配置 DEEPSEEK_API_KEY。");
+  if (!env.DEEPSEEK_API_KEY) throw new HttpError(400, L("还没配置 DEEPSEEK_API_KEY。", "DEEPSEEK_API_KEY isn't set up yet."));
   const p = await getPaper(env, String(b.paperId || ""));
   const settings = await loadSettings(env);
   const context = String(b.context || "").slice(0, 60_000);
   const myNote = String(b.note || "").slice(0, 10_000);
-  const prompt = askPrompt(p, settings.interests, b.kind, String(b.question || "").slice(0, 2000), context, myNote);
+  const prompt = askPrompt(p, settings.interests, b.kind, String(b.question || "").slice(0, 2000), context, myNote, langOf(settings.lang));
   const base = String(env.LLM_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
   const resp = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${env.DEEPSEEK_API_KEY}`, "content-type": "application/json" },
     body: JSON.stringify({ model: env.LLM_MODEL || "deepseek-flash", stream: true, temperature: 0.3, messages: [{ role: "system", content: styleFor(presetFor(settings)) }, { role: "user", content: prompt }] }),
   });
-  if (resp.status === 401) throw new HttpError(502, "DeepSeek 拒绝了请求：检查 DEEPSEEK_API_KEY。");
-  if (resp.status === 402) throw new HttpError(502, "DeepSeek 账户余额不足。");
-  if (resp.status === 429) throw new HttpError(503, "DeepSeek 请求太频繁，稍后再试。");
-  if (!resp.ok || !resp.body) throw new HttpError(502, `DeepSeek 出错了：HTTP ${resp.status}`);
+  if (resp.status === 401) throw new HttpError(502, L("DeepSeek 拒绝了请求：检查 DEEPSEEK_API_KEY。", "DeepSeek rejected the request (401): check DEEPSEEK_API_KEY."));
+  if (resp.status === 402) throw new HttpError(502, L("DeepSeek 账户余额不足。", "Insufficient balance on the DeepSeek account (402)."));
+  if (resp.status === 429) throw new HttpError(503, L("DeepSeek 请求太频繁，稍后再试。", "Too many requests to DeepSeek (429); try again later."));
+  if (!resp.ok || !resp.body) throw new HttpError(502, L("DeepSeek 出错了：HTTP ", "DeepSeek error: HTTP ") + resp.status);
   return new Response(resp.body, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" } });
 }
 
@@ -866,6 +920,7 @@ export async function cloudUpdate(env, now = Date.now()) {
 // 需要 GITHUB_TOKEN（只给这个仓库、Actions 读写权限）和 GITHUB_REPO；没配时 GitHub 自己的定时任务照常兜底。
 
 const JOBS = { daily: "今天的推荐", news: "业界简报", weekly: "本周回顾" };
+const JOBS_EN = { daily: "today's picks", news: "industry brief", weekly: "weekly review" };
 const JOB_MINUTES = { daily: 20, news: 4, weekly: 4 }; // 大约要跑多久，看板上提示用
 const BJ = 8 * 3600e3; // 北京时间（没有夏令时）
 const DAILY_FROM = 9.5; // 北京时间 9:30 以后才自动生成：arXiv 早上 8 点（冬令时 9 点）发布
@@ -935,7 +990,7 @@ const kindOf = (run) => (String(run.path || "").match(/workflows\/(daily|news|we
 // 最近的 GitHub 任务 → 看板上的进度：{running, label, startedAt, queue, minutes, last}
 async function ghRuns(env) {
   const r = await gh(env, "/actions/runs?per_page=20");
-  if (!r.ok) throw new HttpError(502, `读不到 GitHub 上的任务：HTTP ${r.status}，检查 GITHUB_TOKEN 的权限。`);
+  if (!r.ok) throw new HttpError(502, L(`读不到 GitHub 上的任务：HTTP ${r.status}，检查 GITHUB_TOKEN 的权限。`, `Can't read the GitHub runs: HTTP ${r.status}; check the GITHUB_TOKEN permissions.`));
   return ((await r.json()).workflow_runs || []).filter(kindOf);
 }
 
@@ -947,7 +1002,7 @@ function statusOf(runs, dispatched = []) {
   const done = runs.find((x) => x.status === "completed");
   return {
     running: now,
-    label: JOBS[now] || "",
+    label: L(JOBS[now], JOBS_EN[now]) || "",
     startedAt: running?.run_started_at || null,
     queue: kinds.filter((k) => k !== now),
     minutes: now ? JOB_MINUTES[now] : null,
@@ -955,8 +1010,8 @@ function statusOf(runs, dispatched = []) {
       ? {
           kind: kindOf(done),
           ok: done.conclusion === "success",
-          message: done.conclusion === "success" ? "" : `GitHub 上的任务没成功（${done.conclusion}）`,
-          hint: done.conclusion === "success" ? "" : "点“看 GitHub 上的记录”能看到是哪一步出错；常见原因是密钥没填或过期。",
+          message: done.conclusion === "success" ? "" : L(`GitHub 上的任务没成功（${done.conclusion}）`, `The GitHub run didn't succeed (${done.conclusion})`),
+          hint: done.conclusion === "success" ? "" : L("点“看 GitHub 上的记录”能看到是哪一步出错；常见原因是密钥没填或过期。", "Click “View on GitHub” to see which step failed; a missing or expired key is the usual cause."),
           actions: done.conclusion === "success" ? [] : [`retry:${kindOf(done)}`, ...(done.html_url ? [`url:${done.html_url}`] : []), "doctor"],
           at: done.updated_at,
         }
@@ -969,7 +1024,7 @@ async function dispatch(env, kind, inputs) {
     method: "POST",
     body: JSON.stringify({ ref: "main", ...(inputs ? { inputs } : {}) }),
   });
-  if (resp.status !== 204) throw new HttpError(502, `触发失败：GitHub 返回 HTTP ${resp.status}，检查 GITHUB_TOKEN 的权限。`);
+  if (resp.status !== 204) throw new HttpError(502, L(`触发失败：GitHub 返回 HTTP ${resp.status}，检查 GITHUB_TOKEN 的权限。`, `Couldn't start the run: GitHub returned HTTP ${resp.status}; check the GITHUB_TOKEN permissions.`));
 }
 
 // 打开看板和定时检查时调用：该有的还没有、也没在跑，就触发。返回进度（没配 GitHub 或没事可做时返回 null）
@@ -1008,8 +1063,8 @@ export async function jobStatus(env) {
 
 // 看板上点“现在生成”：同一个任务已经在跑就不再触发
 async function runJob(env, job) {
-  if (!env.GITHUB_TOKEN) throw new HttpError(400, "还没配置 GITHUB_TOKEN，可以去 GitHub 仓库的 Actions 页面手动运行。");
-  if (!ghRepo(env)) throw new HttpError(400, "还没配置 GITHUB_REPO（你的仓库，例如 yourname/robot-times）。");
+  if (!env.GITHUB_TOKEN) throw new HttpError(400, L("还没配置 GITHUB_TOKEN，可以去 GitHub 仓库的 Actions 页面手动运行。", "GITHUB_TOKEN isn't set up; you can run it by hand from your repo's Actions page."));
+  if (!ghRepo(env)) throw new HttpError(400, L("还没配置 GITHUB_REPO（你的仓库，例如 yourname/robot-times）。", "GITHUB_REPO isn't set up (your repo, e.g. yourname/robot-times)."));
   const runs = await ghRuns(env);
   const busy = runs.some((x) => ACTIVE.has(x.status) && kindOf(x) === job);
   if (!busy) await dispatch(env, job, null);
@@ -1022,40 +1077,40 @@ const ISSUES = "https://github.com/huxiaoyi-ovo/robot-times/issues/new";
 const check = (id, label, ok, detail = "", hint = "", actions = []) => ({ id, label, ok, detail, hint, actions });
 
 export async function doctor(env, who = {}) {
-  const out = [check("login", "已登录", true, who.email || "")];
+  const out = [check("login", L("已登录", "Logged in"), true, who.email || "")];
   const days = await env.DB.prepare("select count(*) as n from days").first().catch(() => null);
-  out.push(check("db", "数据库", Boolean(days), days ? `${days.n} 天的推荐` : "读不到", days ? "" : "检查 wrangler.jsonc 里的 D1 数据库 ID。"));
+  out.push(check("db", L("数据库", "Database"), Boolean(days), days ? L(`${days.n} 天的推荐`, `${days.n} days of picks`) : L("读不到", "unreadable"), days ? "" : L("检查 wrangler.jsonc 里的 D1 数据库 ID。", "Check the D1 database ID in wrangler.jsonc.")));
   const z = Boolean(env.ZOTERO_USER_ID && env.ZOTERO_API_KEY);
-  out.push(check("zotero", "Zotero 写入", z, "", z ? "" : "在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY（见 cloud-setup.md）。"));
-  out.push(check("llm", "问 AI", env.DEEPSEEK_API_KEY ? true : null, env.DEEPSEEK_API_KEY ? "已配置" : "没配（可选）", env.DEEPSEEK_API_KEY ? "" : "在 Cloudflare 给看板加上 DEEPSEEK_API_KEY。"));
+  out.push(check("zotero", L("Zotero 写入", "Zotero writes"), z, "", z ? "" : L("在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY（见 cloud-setup.md）。", "Add ZOTERO_USER_ID and ZOTERO_API_KEY to the dashboard in Cloudflare (see cloud-setup.md).")));
+  out.push(check("llm", L("问 AI", "Ask AI"), env.DEEPSEEK_API_KEY ? true : null, env.DEEPSEEK_API_KEY ? L("已配置", "configured") : L("没配（可选）", "not set up (optional)"), env.DEEPSEEK_API_KEY ? "" : L("在 Cloudflare 给看板加上 DEEPSEEK_API_KEY。", "Add DEEPSEEK_API_KEY to the dashboard in Cloudflare.")));
   const gh = Boolean(ghRepo(env));
-  out.push(check("github", "按时自动生成", gh ? true : null, gh ? "已配置" : "没配（可选）", gh ? "" : "给看板加上 GITHUB_TOKEN 和 GITHUB_REPO，就能准时生成、在看板上点“现在生成”。"));
+  out.push(check("github", L("按时自动生成", "On-time generation"), gh ? true : null, gh ? L("已配置", "configured") : L("没配（可选）", "not set up (optional)"), gh ? "" : L("给看板加上 GITHUB_TOKEN 和 GITHUB_REPO，就能准时生成、在看板上点“现在生成”。", "Add GITHUB_TOKEN and GITHUB_REPO to the dashboard to generate on time and use “Generate now”.")));
   let history = [];
   if (gh) {
     try {
       const runs = (await ghRuns(env)).filter((x) => x.status === "completed").slice(0, 10);
-      history = runs.map((x) => ({ kind: kindOf(x), ok: x.conclusion === "success", message: x.conclusion === "success" ? "" : `GitHub 上的任务没成功（${x.conclusion}）`, at: x.updated_at, url: x.html_url }));
+      history = runs.map((x) => ({ kind: kindOf(x), ok: x.conclusion === "success", message: x.conclusion === "success" ? "" : L(`GitHub 上的任务没成功（${x.conclusion}）`, `The GitHub run didn't succeed (${x.conclusion})`), at: x.updated_at, url: x.html_url }));
       if (history[0]) {
-        out.push(check("jobs", "最近一次生成", history[0].ok, history[0].ok ? "成功" : history[0].message, history[0].ok ? "" : "点开 GitHub 上的记录看是哪一步出错。", history[0].ok ? [] : [`url:${history[0].url}`]));
+        out.push(check("jobs", L("最近一次生成", "Last run"), history[0].ok, history[0].ok ? L("成功", "succeeded") : history[0].message, history[0].ok ? "" : L("点开 GitHub 上的记录看是哪一步出错。", "Open the run on GitHub to see which step failed."), history[0].ok ? [] : [`url:${history[0].url}`]));
       }
     } catch (e) {
-      out.push(check("jobs", "读 GitHub 上的任务", false, e.message || "", "检查 GITHUB_TOKEN 是否过期、有没有 Actions 读写权限。"));
+      out.push(check("jobs", L("读 GitHub 上的任务", "Reading GitHub runs"), false, e.message || "", L("检查 GITHUB_TOKEN 是否过期、有没有 Actions 读写权限。", "Check GITHUB_TOKEN hasn't expired and has Actions read/write access.")));
     }
   }
   const u = await cloudUpdate(env).catch(() => null);
-  if (u) out.push(check("version", "版本", !u.available, `v${u.current}${u.available ? `，可以更新到 v${u.latest.version}` : ""}`, u.available ? "到你 fork 的仓库页面点 Sync fork。" : "", u.available && u.syncUrl ? [`url:${u.syncUrl}`] : []));
+  if (u) out.push(check("version", L("版本", "Version"), !u.available, `v${u.current}${u.available ? L(`，可以更新到 v${u.latest.version}`, `, v${u.latest.version} available`) : ""}`, u.available ? L("到你 fork 的仓库页面点 Sync fork。", "Click Sync fork on your forked repo's page.") : "", u.available && u.syncUrl ? [`url:${u.syncUrl}`] : []));
   return { checks: out, ok: out.every((c) => c.ok !== false), history };
 }
 
 export function report(d) {
   const mark = (c) => (c.ok ? "✓" : c.ok === null ? "·" : "✗");
   return [
-    `The Robot Times v${VERSION}（云端版）`,
+    `The Robot Times v${VERSION}${L("（云端版）", " (cloud)")}`,
     "",
-    "体检：",
+    L("体检：", "Check-up:"),
     ...d.checks.map((c) => `  ${mark(c)} ${c.label} ${c.detail}`),
     "",
-    "最近的任务：",
-    ...d.history.slice(0, 8).map((h) => `  ${h.at} ${h.kind} ${h.ok ? "成功" : "失败"} ${h.message}`),
+    L("最近的任务：", "Recent runs:"),
+    ...d.history.slice(0, 8).map((h) => `  ${h.at} ${h.kind} ${h.ok ? L("成功", "ok") : L("失败", "failed")} ${h.message}`),
   ].join("\n").replace(/sk-[A-Za-z0-9_-]+/g, "sk-…");
 }

@@ -22,6 +22,7 @@ from ..cloud import repo
 from ..cloud.env import DEEPSEEK_BASE, DEEPSEEK_MODEL, llm_from_env, settings_fallback_from_env
 from ..cloud.store import SqliteStore
 from ..config import CONFIG_DIR
+from ..i18n import L
 from ..zotero.local_api import ZoteroLocalClient
 from .api import LocalApi, stream_chat
 from .jobs import Jobs, weekly_target
@@ -77,7 +78,12 @@ def make_runners(store, zotero: ZoteroLocalClient) -> dict[str, Any]:
         if not zotero.ping():
             from .jobs import WaitForZotero
 
-            raise WaitForZotero("连不上 Zotero：打开 Zotero 后会自动接着生成，也可以点“重试”。")
+            raise WaitForZotero(
+                L(
+                    "连不上 Zotero：打开 Zotero 后会自动接着生成，也可以点“重试”。",
+                    "Can't reach Zotero: it will carry on once Zotero is open, or click “Retry”.",
+                )
+            )
         deps = DailyDeps(
             store=store,
             zotero=zotero,
@@ -92,7 +98,7 @@ def make_runners(store, zotero: ZoteroLocalClient) -> dict[str, Any]:
         doc = run_daily(deps, _settings(store))
         if doc.get("skipped"):
             return doc["headline"]
-        return f"{len(doc['picks'])} 篇推荐：{doc['headline']}"
+        return L("{} 篇推荐：{}", "{} picks: {}").format(len(doc["picks"]), doc["headline"])
 
     def news(force: bool = False) -> str:
         from ..cloud.daily import today_local
@@ -101,9 +107,13 @@ def make_runners(store, zotero: ZoteroLocalClient) -> dict[str, Any]:
 
         settings = _settings(store)
         day = today_local()
-        save_weather(store, day, str(settings.get("weatherCity") or ""))
+        save_weather(
+            store, day, str(settings.get("weatherCity") or ""), lang=settings.get("lang") or "zh"
+        )
         doc = run_news(store, llm_from_env(), settings, day)
-        return f"快讯 {len(doc['news'])} 条，深度 {len(doc['deep'])} 篇"
+        return L("快讯 {} 条，深度 {} 篇", "{} news items, {} long reads").format(
+            len(doc["news"]), len(doc["deep"])
+        )
 
     def weekly(force: bool = False) -> str:
         from ..cloud.daily import TZ, today_local
