@@ -332,6 +332,7 @@ textarea{resize:vertical;line-height:1.75}
 .three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 @media (max-width:560px){.three{grid-template-columns:1fr 1fr}}
 .slider{display:grid;grid-template-columns:48px 1fr 44px;gap:14px;align-items:center;font-size:14px}
+.lang-en .slider{grid-template-columns:76px 1fr 44px}
 .slider label{display:block;color:var(--ink);font-size:14px}
 .slider input{width:100%;accent-color:var(--accent)}
 .slider output{text-align:right;font-family:var(--serif);font-size:16px;color:var(--ink)}
@@ -620,6 +621,7 @@ main{padding-top:16px}
 .rsect{border-top:1px solid var(--ink);padding-top:12px;margin-top:4px;margin-bottom:22px}
 .plan-rail{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
 .plan-rail .bar{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:52px minmax(0,1fr) 52px;gap:10px;align-items:center;width:100%;font-family:var(--franklin);font-size:12.5px;color:var(--ink)}
+.lang-en .plan-rail .bar{grid-template-columns:74px minmax(0,1fr) 52px}
 .plan-rail .cells{height:8px}
 .plan-rail .pm{text-align:right;color:var(--meta)}
 .plan-rail .bar:hover .pn{text-decoration:underline;text-underline-offset:3px}
@@ -858,41 +860,486 @@ table.plan{font-family:var(--franklin)}
 </style>
 </head>
 <body>
-<div class="slim" id="slim" inert><div class="wrap"><b class="site-name">The Robot Times</b><nav class="nav" aria-label="页面"></nav></div></div>
+<div class="slim" id="slim" inert><div class="wrap"><b class="site-name">The Robot Times</b><nav class="nav" aria-label="页面" data-t-aria="页面"></nav></div></div>
 
 <header class="mast" id="mast">
   <div class="wrap m1">
-    <button class="msearch" data-tab="lib" aria-label="搜索论文库" title="搜索论文库"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8.5" cy="8.5" r="6"/><path d="M13 13l5 5"/></svg></button>
+    <button class="msearch" data-tab="lib" aria-label="搜索论文库" title="搜索论文库" data-t-aria="搜索论文库" data-t-title="搜索论文库"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8.5" cy="8.5" r="6"/><path d="M13 13l5 5"/></svg></button>
     <span class="med" id="edition"></span>
     <span class="m1r" id="m1r"></span>
   </div>
   <div class="wrap m2"><div class="m2l" id="dateline"></div><h1 class="site-name">The Robot Times</h1><div class="m2r" id="mastsub"></div></div>
-  <div class="wrap"><nav class="nav mnav" aria-label="页面"></nav></div>
+  <div class="wrap"><nav class="nav mnav" aria-label="页面" data-t-aria="页面"></nav></div>
   <div class="wrap"><div class="rules"></div></div>
 </header>
 
 <div class="wrap"><div class="jobbar" id="jobbar" role="status" hidden></div><div class="jobbar hintbar" id="hintbar" hidden></div><div class="jobbar hintbar" id="updbar" role="status" hidden></div></div>
-<main class="wrap" id="main"><p class="mute">正在载入…</p></main>
+<main class="wrap" id="main"><p class="mute" data-t="正在载入…">正在载入…</p></main>
 
 <div id="reader-root"></div>
 <div class="toast" id="toast" role="status" hidden></div>
-<dialog class="logdlg" id="logdlg" aria-label="日志"><div class="row"><b style="flex:1">日志</b><button class="btn" data-log="serve">看板</button><button class="btn" data-log="setup">安装和依赖</button></div>
-<pre id="logtext">载入中…</pre><div class="row"><span class="small faint" id="logpath" style="flex:1"></span><button class="btn" data-act="logs-refresh">刷新</button><button class="btn" data-act="logs-copy">复制</button><button class="btn pri" data-act="logs-close">关掉</button></div></dialog>
+<dialog class="logdlg" id="logdlg" aria-label="日志" data-t-aria="日志"><div class="row"><b style="flex:1" data-t="日志">日志</b><button class="btn" data-log="serve" data-t="看板">看板</button><button class="btn" data-log="setup" data-t="安装和依赖">安装和依赖</button></div>
+<pre id="logtext">载入中…</pre><div class="row"><span class="small faint" id="logpath" style="flex:1"></span><button class="btn" data-act="logs-refresh" data-t="刷新">刷新</button><button class="btn" data-act="logs-copy" data-t="复制">复制</button><button class="btn pri" data-act="logs-close" data-t="关掉">关掉</button></div></dialog>
 
 <script>
 (() => {
+/* ---------- 语言 ----------
+   界面文字写中文原文，用 t("中文") 包起来；英文版按原文查下面的 EN 表（{n} 这类是占位）。
+   语言跟设置里的 lang 走；第一次打开、还没设置好时按浏览器语言。请求都带 X-Lang，接口的报错也跟着换。 */
+let LANG = (()=>{ try{ const v=localStorage.getItem("lang"); if(v==="zh"||v==="en") return v; }catch{} return /^zh/i.test(navigator.language||"") ? "zh" : "en"; })();
+const EN = {
+  "页面":"Pages",
+  "搜索论文库":"Search the library",
+  "正在载入…":"Loading…",
+  "日志":"Logs",
+  "看板":"Dashboard",
+  "安装和依赖":"Install & dependencies",
+  "刷新":"Refresh",
+  "复制":"Copy",
+  "关掉":"Close",
+  "载入中…":"Loading…",
+  "精读":"Close read",
+  "写笔记":"Write notes",
+  "接着读":"Continue",
+  "接读":"Continue",
+  "看摘要":"Abstracts",
+  "摘要":"Abstract",
+  "扫标题":"Skim titles",
+  "扫读":"Skim",
+  "笔记":"Notes",
+  "今日":"Today",
+  "业界":"Industry",
+  "本周":"This week",
+  "论文库":"Library",
+  "设置":"Settings",
+  "待读":"To read",
+  "在读":"Reading",
+  "已读":"Read",
+  "跳过":"Skipped",
+  "可 build on":"Can build on",
+  "方法可借鉴":"Method to borrow",
+  "反例/局限":"Counterexample / limits",
+  "要复现":"To reproduce",
+  "组会分享":"For group meeting",
+  "重试":"Retry",
+  "去充值":"Top up",
+  "下载 Zotero":"Download Zotero",
+  "看 GitHub 上的记录":"View on GitHub",
+  "打开网页":"Open page",
+  "去设置":"Go to setup",
+  "看日志":"View logs",
+  "体检":"Check-up",
+  "重启看板":"Restart dashboard",
+  "更新":"Update",
+  "连不上看板：它可能停了。":"Can't reach the dashboard: it may have stopped.",
+  "连不上服务器，或者登录过期了，请刷新页面。":"Can't reach the server, or your login expired; refresh the page.",
+  "重新打开 The Robot Times 应用（或者重启电脑），再刷新这个页面。":"Reopen The Robot Times app (or restart your computer), then refresh this page.",
+  "登录已过期，请刷新页面。":"Your login expired; refresh the page.",
+  "请求失败：HTTP {s}":"Request failed: HTTP {s}",
+  "相关 {r}":"Relevance {r}",
+  "，模型判断 {l}":", model {l}",
+  "，影响 {i}，热度 {b}":", impact {i}, buzz {b}",
+  "综合":"score",
+  "{names} 等 {n} 人":"{names} and {n} others",
+  "，":", ",
+  "已入 Zotero":"In Zotero",
+  "已读，点一下改回待读":"Read; click to mark as unread",
+  "标为已读":"Mark as read",
+  "今天的阅读时间":"Today's reading time",
+  "{n} 分钟":"{n} min",
+  "今天的阅读计划":"Today's reading plan",
+  "已读 {a} / {b}":"Read {a} / {b}",
+  "{n} 分钟，其中 {m} 分钟写笔记":"{n} min, {m} of them for notes",
+  "打开这篇论文":"Open this paper",
+  "图：论文原图，来自 arXiv":"Figure from the paper, via arXiv",
+  "为什么推荐给你":"Why you're seeing this",
+  "怎么读":"How to read it",
+  "打开 PDF":"Open PDF",
+  "读完了":"Done reading",
+  "开始读":"Start reading",
+  "看笔记":"View notes",
+  "加入 Zotero":"Add to Zotero",
+  "撤销跳过":"Undo skip",
+  "跳过，并少推这类论文":"Skip, and show fewer like this",
+  "× 不相关":"× Not relevant",
+  "为什么推荐":"Why this one",
+  "精读 {n} 分钟":"Close read, {n} min",
+  "{n} 分钟，已读 {a} / {b}":"{n} min, read {a} / {b}",
+  "今天的早报还没出":"Today's edition isn't out yet",
+  "电脑开着时，工作日上午 9:30 以后自动生成（不用打开这个页面）：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 {n} 分钟的阅读计划。第一次要几分钟（要下载向量模型），生成好会自动显示。":"While your computer is on, it's generated automatically on weekdays after arXiv's daily release (9:30 Beijing time; no need to keep this page open): new arXiv papers are fetched, scored against your Zotero library, and laid out as a {n}-minute reading plan. The first run takes a few minutes (it downloads an embedding model) and shows up here when ready.",
+  "工作日上午 9:40 左右（北京时间）自动生成：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 {n} 分钟的阅读计划。":"Generated automatically on weekdays at about 9:40 Beijing time, shortly after arXiv's daily release: new arXiv papers are fetched, scored against your Zotero library, and laid out as a {n}-minute reading plan.",
+  " 第一次可以去 GitHub 仓库的 Actions → daily → Run workflow 手动生成。":" For the first run, go to your GitHub repo's Actions → daily → Run workflow.",
+  "现在生成今天的推荐":"Generate today's picks now",
+  "{d}的早报":"The edition for {d}",
+  "前一期":"Previous edition",
+  "后一期":"Next edition",
+  "从 {a} 篇新论文中选出 {b} 篇":"{b} picked from {a} new papers",
+  "今日推荐":"Today's picks",
+  "简讯":"Briefly",
+  "扫标题 {n} 分钟":"skim titles, {n} min",
+  "刚刚":"just now",
+  "{n} 小时前":"{n}h ago",
+  "讨论":"Discussion",
+  "{n} 分":"{n} pts",
+  "深度":"Long reads",
+  "业界全部 {n} 条 ›":"All {n} industry items ›",
+  "全部 {n} 条 ›":"All {n} items ›",
+  "还没有业界简报":"No industry brief yet",
+  "电脑开着时每天早上 8 点以后自动生成：":"Generated automatically every day after 8:00 Beijing time while your computer is on: ",
+  "每天早上 8:20 左右（北京时间）自动生成：":"Generated automatically every day at about 8:20 Beijing time: ",
+  "从和你方向有关的行业媒体、公司博客、AIHOT、Hacker News，以及 Substack 等深度文章里挑出今天值得看的，配中文标题和摘要。":"today's items worth reading are picked from industry media, company blogs, AIHOT, Hacker News and long-form writing on Substack and elsewhere, each with a headline and summary.",
+  "第一次可以去 GitHub 仓库的 Actions → news → Run workflow 手动生成。":" For the first run, go to your GitHub repo's Actions → news → Run workflow.",
+  "和你方向有关的行业每天发生了什么。深度长文放在前面，快讯按类别排；标题和摘要由大模型根据原文写成，数字请以原文为准。":"What happened today in the industry around your field. Long reads come first, news is grouped by category; headlines and summaries are written by an LLM from the originals, so check numbers against the source.",
+  "前一天":"Previous day",
+  "后一天":"Next day",
+  "从 {c} 条里选出深度 {d} 篇、快讯 {n} 条":"{d} long reads and {n} news items picked from {c}",
+  "分析机构、投资人和研究者的长文":"Long-form pieces from analysts, investors and researchers",
+  "快讯":"News",
+  "{n} 条，按类别排，每类里重要的在前":"{n} items by category, most important first",
+  "今天没有值得放进来的快讯。":"No news worth including today.",
+  "今天的来源":"Today's sources",
+  "没抓到":"Failed",
+  "（下次会再试）":" (will retry next time)",
+  "还没有周报":"No weekly review yet",
+  "每周日晚上 6 点后自动生成（错过了会在下周补上）：":"Generated automatically on Sundays after 18:00 Beijing time (if missed, it catches up the next week): ",
+  "每周日晚上 8 点左右（北京时间）自动生成：":"Generated automatically on Sundays at about 20:00 Beijing time: ",
+  "这一周你的方向发生了什么、你读了哪些、下周每天读什么。":"what happened in your field this week, what you read, and what to read each day next week.",
+  "现在生成本周回顾":"Generate this week's review now",
+  "上一周":"Previous week",
+  "下一周":"Next week",
+  "周报":"Weekly review",
+  "本周回顾":"This week in review",
+  "本周推荐 {n} 篇":"{n} papers recommended this week",
+  "你读完 {n} 篇":"{n} finished",
+  "本周主题":"This week's themes",
+  "下周怎么读":"Next week's reading",
+  "日期":"Day",
+  "安排":"Plan",
+  "论文":"Papers",
+  "时间":"Time",
+  "工作日每天另外留 10 分钟扫当天的新推荐、10 分钟写笔记":"On weekdays, also keep 10 minutes for the day's new picks and 10 for notes",
+  "本周最值得读的":"Most worth reading this week",
+  "按综合分排序":"by score",
+  "搜标题、作者、要点或 arXiv 编号":"Search titles, authors, gists or arXiv IDs",
+  "搜索论文":"Search papers",
+  "全部":"All",
+  "{n} 篇":"{n} papers",
+  "，先显示 {n} 篇":", showing {n}",
+  "没有符合条件的论文":"No matching papers",
+  "论文库是空的":"The library is empty",
+  "换个关键词或状态试试。":"Try another keyword or status.",
+  "每日推荐过的论文都会进入这里。":"Every paper from the daily picks ends up here.",
+  "再看 50 篇":"Show 50 more",
+  "更早":"Earlier",
+  "还没有笔记":"No notes yet",
+  "打开一篇论文，用自己的话写 3 到 5 句：问题、核心 idea、关键结果、你的看法。笔记自动保存，会出现在这里。":"Open a paper and write 3 to 5 sentences in your own words: the problem, the core idea, the key result, your take. Notes save automatically and show up here.",
+  "、":", ",
+  "还没写内容":"Nothing written yet",
+  "综合分 = 相关 × {r} + 影响 × {i} + 热度 × {b}，再按总权重归一":"Score = relevance × {r} + impact × {i} + buzz × {b}, normalized by the total weight",
+  "语言":"Language",
+  "界面和生成内容的语言（摘要、解读、简报、周报、问 AI）":"Language for the interface and generated content (summaries, reviews, briefs, weekly reviews, Ask AI)",
+  "界面马上切换；已经生成的内容不变，下一次生成起用新语言。":"The interface switches right away; what's already generated stays as is, and new content uses the new language from the next run.",
+  "方向":"Field",
+  "方向预设":"Field preset",
+  "报名":"Masthead name",
+  "领域名":"Field name",
+  "方向预设决定大模型的写作人设、论文的方向标签和业界新闻来源。报名和领域名留空就用预设的；领域名会写进大模型的人设（“你是一位做……的资深研究者”）。":"The preset sets the LLM's writing persona, the topic labels for papers and the industry news sources. Leave the masthead and field name empty to use the preset's; the field name goes into the LLM persona (“You are a senior researcher in …”).",
+  "天气城市（浏览器不给定位、也没在报头上选地点时用；留空就不显示）":"Weather city (used when the browser gives no location and none is picked in the masthead; leave empty to hide)",
+  "例如：杭州":"e.g. Boston",
+  "读什么":"What to read",
+  "研究兴趣（大模型精排和写推荐理由时会看这段话）":"Research interests (the LLM reads this when ranking and explaining picks)",
+  "例如：人形机器人全身控制、运动模仿、sim2real；不看纯视觉检测（写得越具体，推荐越准）":"e.g. humanoid whole-body control, motion imitation, sim2real; no pure vision detection (the more specific, the better the picks)",
+  "arXiv 分类（逗号分隔）":"arXiv categories (comma separated)",
+  "每天读多久（分钟）":"Reading time per day (minutes)",
+  "每天推荐几篇":"Papers per day",
+  "Zotero 标签":"Zotero tag",
+  "加入 Zotero 时放进的文件夹（填 Zotero 里已有的文件夹名，留空就放在“我的文库”）":"Collection for “Add to Zotero” (an existing collection name; leave empty for “My Library”)",
+  "例如：Inbox":"e.g. Inbox",
+  "业界页额外订阅（RSS 地址，一行一个。Substack 的地址是 https://名字.substack.com/feed）":"Extra feeds for the Industry page (RSS URLs, one per line; Substack feeds are https://name.substack.com/feed)",
+  "怎么排":"Ranking",
+  "每篇论文有三项分数。<b>相关</b>看和你的文献库、研究兴趣、以往反馈像不像，再加上大模型的判断；<b>影响</b>看有没有写明被顶会顶刊接收；<b>热度</b>看 Hugging Face 上的点赞，没上榜算中性。拖动时，今日和论文库里的排序会跟着变。":"Each paper has three scores. <b>Relevance</b> is how similar it is to your library, interests and past feedback, plus the LLM's judgment; <b>impact</b> is whether it states acceptance at a top venue; <b>buzz</b> is Hugging Face upvotes (neutral if not listed). Dragging re-sorts Today and the Library as you go.",
+  "相关":"Relevance",
+  "影响":"Impact",
+  "热度":"Buzz",
+  "多样性":"Diversity",
+  "同一个方向的论文太多时，往右拖会让位给其他方向（0 是只按综合分排）。下一次生成推荐时生效。":"When one topic crowds the list, dragging right makes room for other topics (0 ranks by score only). Takes effect on the next run.",
+  "保存设置":"Save settings",
+  "按新设置重新生成今天的推荐":"Regenerate today's picks with the new settings",
+  "连接":"Connections",
+  "已登录：{who}":"Logged in: {who}",
+  "可以写入 Zotero（本机）":"Can write to Zotero (this computer)",
+  "还不能写入 Zotero：点下面的按钮重新连接，在 Zotero 弹窗里点 Always Allow":"Can't write to Zotero yet: click the button below to reconnect, then Always Allow in the Zotero pop-up",
+  "可以问 AI、写中文解读":"Ask AI and reviews are available",
+  "还没配大模型（可选）：点下面的按钮填密钥":"No LLM yet (optional): click the button below to add a key",
+  "数据存在这台电脑上（~/.robot-times/robot-times.db）":"Data stays on this computer (~/.robot-times/robot-times.db)",
+  "导出备份（.sql，也能导进云端版）":"Export a backup (.sql, also importable into the cloud version)",
+  "重新连接 Zotero、换大模型":"Reconnect Zotero, change the LLM",
+  "连接 Zotero、配大模型":"Connect Zotero, set up the LLM",
+  "可以写入 Zotero":"Can write to Zotero",
+  "还不能写入 Zotero：在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY":"Can't write to Zotero yet: add ZOTERO_USER_ID and ZOTERO_API_KEY to the dashboard in Cloudflare",
+  "可以问 AI":"Ask AI is available",
+  "还不能问 AI：在 Cloudflare 给看板加上 DEEPSEEK_API_KEY":"Ask AI is off: add DEEPSEEK_API_KEY to the dashboard in Cloudflare",
+  "可以在这里手动生成推荐":"You can generate picks from here",
+  "“立即生成”没开（可选）：在 Cloudflare 给看板加上 GITHUB_TOKEN":"“Generate now” is off (optional): add GITHUB_TOKEN to the dashboard in Cloudflare",
+  "正在检测 Zotero……":"Checking Zotero…",
+  "Zotero → 设置":"Zotero → Settings",
+  "编辑 → 设置":"Edit → Settings",
+  "打开 Zotero。还没装的话，先到 {dl} 下载安装。打开后这里会自动往下走。":"Open Zotero. If it isn't installed, download it from {dl} first. This page moves on by itself once Zotero is open.",
+  "你的 Zotero 是 {v}，需要 10 或更新的版本：到 {dl} 下载新版本安装（文献库不会丢）。":"Your Zotero is {v}; version 10 or newer is required. Download it from {dl} (your library is kept).",
+  "在 Zotero 里打开 <b>{path} → 高级</b>，勾选<b>“允许此计算机上的其他应用程序与 Zotero 通信”</b>。勾上后这里会自动往下走。":"In Zotero, open <b>{path} → Advanced</b> and tick <b>“Allow other applications on this computer to communicate with Zotero”</b>. This page moves on by itself once it's ticked.",
+  "找不到的话，也可以让我帮你打开：先<b>完全退出 Zotero</b>，点下面的按钮，再重新打开 Zotero。":"Can't find it? I can turn it on for you: <b>quit Zotero completely</b>, click the button below, then open Zotero again.",
+  "正在打开…":"Turning it on…",
+  "帮我打开这个开关":"Turn it on for me",
+  "← 返回设置":"← Back to settings",
+  "重新设置连接":"Reconnect",
+  "欢迎使用 {name}":"Welcome to {name}",
+  "改好哪一步都行，最后点“保存”。":"Change any step you like, then click “Save”.",
+  "四步设置好，之后每天早上打开这里就是你的论文早报。数据都留在这台电脑上。":"Four steps and you're set: each morning this page becomes your paper digest. Your data stays on this computer.",
+  "连上 Zotero":"Connect to Zotero",
+  "Zotero 已经打开":"Zotero is open",
+  "版本 10 或更新":"Version 10 or newer",
+  "（现在是 {v}）":" (currently {v})",
+  "允许本机的程序访问":"Local apps are allowed",
+  "重新检测":"Check again",
+  "允许它把论文加进 Zotero":"Let it add papers to Zotero",
+  "已经允许了。":"Allowed. ",
+  "等你在 Zotero 里点 Always Allow…":"Waiting for you to click Always Allow in Zotero…",
+  "加入 Zotero 时每次都弹窗，或者换了电脑上的 Zotero：":"If Zotero asks every time you add a paper, or you changed Zotero on this computer: ",
+  "重新连接":"Reconnect",
+  "点下面的按钮后，切到 Zotero，在弹出的窗口里点 <b>Always Allow</b>（总是允许）。":"Click the button below, switch to Zotero, and click <b>Always Allow</b> in the pop-up.",
+  "连接 Zotero":"Connect Zotero",
+  "你在研究什么":"What you work on",
+  "研究兴趣（一两句话，越具体推荐越准）":"Research interests (a sentence or two; the more specific, the better the picks)",
+  "例如：足式机器人运动控制、人形机器人全身控制、sim2real；不看纯视觉检测":"e.g. legged locomotion control, humanoid whole-body control, sim2real; no pure vision detection",
+  "arXiv 分类（默认机器人 cs.RO；其他方向例如 cs.LG、cs.CV,cs.AI）":"arXiv categories (robotics cs.RO by default; other fields e.g. cs.LG, cs.CV,cs.AI)",
+  "“加入 Zotero”时放进哪个文件夹":"Collection for “Add to Zotero”",
+  "我的文库（不放进文件夹）":"My Library (no collection)",
+  "大模型（可以跳过，但强烈建议）":"LLM (optional, but strongly recommended)",
+  "已经配好了，可以写中文摘要、全文解读和“问 AI”。":"All set: summaries, full-text reviews and “Ask AI” are on. ",
+  "换一个密钥或模型":"Change key or model",
+  "有了它才有中文标题和摘要、全文解读、更准的排序和“问 AI”。默认用 {ds}（注册后在 API keys 里创建密钥，充几块钱能用很久）。密钥只存在这台电脑上。":"It powers the summaries, full-text reviews, sharper ranking and “Ask AI”. {ds} is the default (sign up and create a key under API keys; a few dollars lasts a long time). Any OpenAI-compatible API works too. The key is stored only on this computer.",
+  "密钥":"API key",
+  "用其他 OpenAI 兼容的接口（包括本地 Ollama）":"Use another OpenAI-compatible API (including local Ollama)",
+  "接口地址":"API URL",
+  "模型名":"Model name",
+  "正在测试…":"Testing…",
+  "测试并保存":"Test and save",
+  "先跳过了，以后在设置页也能配":"Skipped for now; you can set it up later in Settings",
+  "先跳过":"Skip for now",
+  "保存":"Save",
+  "开始使用":"Get started",
+  "已经打开了，现在重新打开 Zotero":"Done; now open Zotero again",
+  "连上了":"Connected",
+  "大模型能用了":"The LLM works",
+  "开始生成今天的推荐了，第一次要几分钟":"Generating today's picks; the first run takes a few minutes",
+  "推荐":"Picks",
+  "业界简报":"Industry brief",
+  "都正常。":"All good.",
+  "标红的是有问题的地方，按旁边的说明处理；处理不了就复制诊断信息去报告问题。":"Items in red have problems; follow the notes next to them. If you're stuck, copy the diagnostics into a bug report.",
+  "最近 {n} 次生成":"Last {n} runs",
+  "成功":"ok",
+  "失败":"failed",
+  "体检和排查":"Check-up and troubleshooting",
+  "哪里不对劲，先点“开始体检”：一项项检查，有问题的地方会告诉你怎么办。":"Something off? Click “Run check-up”: it goes through each piece and tells you how to fix what's wrong.",
+  "正在检查…":"Checking…",
+  "再检查一次":"Check again",
+  "开始体检":"Run check-up",
+  "查看日志":"View logs",
+  "复制诊断信息":"Copy diagnostics",
+  "报告问题":"Report a problem",
+  "诊断信息已复制，可以贴到 GitHub 上的问题里（不含密钥）":"Diagnostics copied; paste them into a GitHub issue (no keys included)",
+  "诊断信息（复制下面的内容）":"Diagnostics (copy the text below)",
+  "（还没有内容）":"(nothing yet)",
+  "这个日志还没有内容。":"This log is empty.",
+  "正在重启看板，好了会自动刷新":"Restarting the dashboard; the page refreshes when it's back",
+  "已复制":"Copied",
+  "重新开始生成了，好了会自动显示":"Started again; results show up here when ready",
+  "已导出 {f}，在浏览器的下载文件夹里":"Exported {f} to your browser's downloads folder",
+  "有新版本 <b>v{v}</b>":"New version <b>v{v}</b>",
+  "更新内容":"what's new",
+  "已经是最新版本":"Up to date",
+  "去 GitHub 同步":"Sync on GitHub",
+  "这份代码不是用安装脚本装的，请自己 git pull":"This copy wasn't installed by the installer; run git pull yourself",
+  "版本":"Version",
+  "当前 <b>v{v}</b>，":"Current <b>v{v}</b>. ",
+  "。":".",
+  "云端版的代码在你 fork 的仓库里：有新版本时到 GitHub 上你的仓库页面点 <b>Sync fork</b>，Cloudflare 会自动重新部署。":"The cloud version's code lives in your fork: when there's a new version, click <b>Sync fork</b> on your repo page on GitHub and Cloudflare redeploys automatically.",
+  "自动更新（有新版本时，在看板 10 分钟没人用、也没在生成推荐的时候自动更新）":"Update automatically (when a new version is out, update once the dashboard has been idle for 10 minutes and nothing is generating)",
+  "开机后在后台自动运行（关掉的话，要用时从应用列表打开 The Robot Times）":"Run in the background at login (if off, open The Robot Times from your apps when you need it)",
+  "检查更新":"Check for updates",
+  "正在更新到 v{v}……大约一分钟，好了页面会自动刷新。":"Updating to v{v}… about a minute; the page refreshes when it's done.",
+  "更新没成功：{e}。现在用的还是 v{v}。":"The update failed: {e}. Still on v{v}.",
+  "知道了":"Got it",
+  "有新版本 <b>v{v}</b>（现在是 v{c}）":"New version <b>v{v}</b> (you have v{c})",
+  "以后再说":"Later",
+  "已更新到 v{v}":"Updated to v{v}",
+  "（":" (",
+  "）":")",
+  "今天 {a}°–{b}°":"today {a}°–{b}°",
+  "实时":"now",
+  "{d}的预报":"forecast for {d}",
+  "今天的预报":"today's forecast",
+  "降水概率 {p}%":"{p}% chance of rain",
+  "，点一下换地点":"; click to change location",
+  "天气：":"Weather: ",
+  "天气地点":"Weather location",
+  "输入城市，例如 杭州、上海、Boston":"Type a city, e.g. Boston, London, Hangzhou",
+  "现在：":"Now: ",
+  "（手动）":" (manual)",
+  "（自动定位）":" (auto-located)",
+  "改回用我的位置":"Use my location again",
+  "查找中…":"Searching…",
+  "没找到“{q}”，换个写法试试":"Nothing found for “{q}”; try another spelling",
+  "查不到，稍后再试":"Lookup failed; try again later",
+  "当前位置":"Current location",
+  "今日早报":"Today's edition",
+  "早报":"Morning edition",
+  "今日 {n} 篇":"{n} today",
+  "arXiv 新论文":"New on arXiv",
+  "打不开数据":"Can't load data",
+  "重新载入":"Reload",
+  "由 arXiv 和 Hugging Face 的公开数据生成，摘要由大模型撰写，请以原文为准":"Built from public arXiv and Hugging Face data; summaries are written by an LLM, so check the originals",
+  "快捷键：<kbd>J</kbd><kbd>K</kbd> 上下篇，<kbd>Enter</kbd> 打开，<kbd>←</kbd><kbd>→</kbd> 文章间切换，<kbd>Esc</kbd> 关闭":"Keys: <kbd>J</kbd><kbd>K</kbd> next/previous, <kbd>Enter</kbd> open, <kbd>←</kbd><kbd>→</kbd> switch papers, <kbd>Esc</kbd> close",
+  "放大 {x}":"Enlarge {x}",
+  "图":"figure",
+  "正在载入解读":"Loading the review",
+  "要点":"Gist",
+  "解读":"Review",
+  "读了全文":"From the full text",
+  "只依据摘要":"From the abstract only",
+  "，由大模型撰写，请以原文为准":"; written by an LLM, check the original",
+  "摘要语言":"Abstract language",
+  "{v} 已接收":"Accepted at {v}",
+  "综合分按设置里的权重计算":"The score uses the weights from Settings",
+  "模型判断 {l}":"Model {l}",
+  "影响 {i}":"Impact {i}",
+  "热度 {b}":"Buzz {b}",
+  "你库里相近的":"Close to your library",
+  "我的笔记":"My notes",
+  "阅读状态":"Reading status",
+  "用自己的话写 3 到 5 句：&#10;问题：&#10;核心 idea：&#10;关键结果：&#10;我的看法 / 和 X 的区别：":"3 to 5 sentences in your own words:&#10;Problem:&#10;Core idea:&#10;Key result:&#10;My take / how it differs from X:",
+  "先写笔记再加入 Zotero，笔记会一起写进条目下面。":"Write notes before adding to Zotero and they go into the item too.",
+  "以后的推荐":"Future picks",
+  "问 AI":"Ask AI",
+  "例如：它和我库里的 X 方法有什么区别？换到我的任务上会遇到什么问题？":"e.g. How does it differ from method X in my library? What would break on my task?",
+  "问题":"Question",
+  "粘贴原文段落（可选：从 Zotero 打开 PDF，复制方法或实验部分）":"Paste a passage (optional: open the PDF in Zotero and copy the method or experiments)",
+  "粘贴方法、实验或看不懂的段落":"Paste the method, experiments or a passage you don't follow",
+  "原文段落":"Passage",
+  "提问":"Ask",
+  "检查我的笔记":"Check my notes",
+  "停止":"Stop",
+  "存入笔记":"Save to notes",
+  "翻页":"Pagination",
+  "‹ 上一篇":"‹ Previous",
+  "下一篇 ›":"Next ›",
+  "论文详情":"Paper details",
+  "上一篇":"Previous",
+  "上一篇（←）":"Previous (←)",
+  "下一篇":"Next",
+  "下一篇（→）":"Next (→)",
+  "关闭":"Close",
+  "关闭（Esc）":"Close (Esc)",
+  "第 {i} 篇，共 {n} 篇":"{i} of {n}",
+  "解读没载入：":"The review didn't load: ",
+  "查看大图":"Enlarged figure",
+  "缺 PDF":"PDF missing",
+  "不在“{f}”里":"Not in “{f}”",
+  "补全 PDF 和文件夹":"Add PDF and collection",
+  "放进 {f}":"Put in {f}",
+  "这篇在 Zotero 里已经删掉了，可以重新加入":"This was deleted in Zotero; you can add it again",
+  "已从 Zotero 撤销（移进了 Zotero 的回收站，需要时可以在那里恢复）":"Removed from Zotero (moved to Zotero's trash; you can restore it there)",
+  "在电脑上的 Zotero 里选中这个条目（需要已同步）":"Select this item in Zotero on your computer (needs to be synced)",
+  "在 Zotero 中打开":"Open in Zotero",
+  "网页版":"Web",
+  "处理中…":"Working…",
+  "补全":"Fix",
+  "把条目移进 Zotero 的回收站":"Move the item to Zotero's trash",
+  "撤销":"Undo",
+  "还没配置 Zotero":"Zotero isn't set up",
+  "正在写入…":"Writing…",
+  "多推这类":"More like this",
+  "少推这类":"Fewer like this",
+  "保存中…":"Saving…",
+  "已保存":"Saved",
+  "没保存上":"Not saved",
+  "“{f}”文件夹":"the “{f}” collection",
+  "“我的文库”":"“My Library”",
+  "已加入 Zotero 的{w}，但 PDF 没加上：{e}":"Added to {w} in Zotero, but the PDF wasn't: {e}",
+  "已放进{w}":"Put in {w}",
+  "已加入 Zotero 的{w}":"Added to {w} in Zotero",
+  "，PDF 一起存进去了":", PDF included",
+  "（摘要笔记没写上：{e}）":" (the summary note failed: {e})",
+  "。同步后就能直接打开":". Open it once Zotero syncs",
+  "。同步后在条目上右键“查找可用的 PDF”":". After syncing, right-click the item and choose “Find Available PDF”",
+  "记下了，之后多推这类论文":"Noted: more papers like this",
+  "记下了，之后少推这类论文":"Noted: fewer papers like this",
+  "先写几句笔记，再让 AI 检查。":"Write a few sentences of notes first, then ask the AI to check them.",
+  "正在想…":"Thinking…",
+  "回答中断了，可以再试一次。":"The answer was cut off; try again.",
+  "设置已保存，下一次推荐会按新设置生成":"Settings saved; the next picks will use them",
+  "已开始生成，好了会自动显示":"Generating; results show up here when ready",
+  "今天的推荐":"Today's picks",
+  "没生成成功":"Generation failed",
+  "{x}没生成成功":"{x} failed to generate",
+  "报错原文（{at}）":"Raw error ({at})",
+  "大约 {n} 分钟":"about {n} minutes",
+  "要几分钟":"a few minutes",
+  "正在生成{x}":"Generating {x}",
+  "，之后是{y}":", then {y}",
+  "……{eta}，好了会自动显示，不用刷新。":"… {eta}; it shows up here when ready, no need to refresh.",
+  "生成好了":"Done",
+  "：":": ",
+  "天气地点已记住":"Weather location saved",
+  "改回按你的位置显示天气":"Weather follows your location again",
+  "已跳过，之后少推这类论文":"Skipped; fewer papers like this from now on",
+  "有新版本 v{v}":"New version v{v}",
+  "AI 解读":"AI notes",
+  "已存入笔记":"Saved to notes",
+  "开机后会自动在后台运行":"It will run in the background at login",
+  "已关掉开机自动运行":"Run at login is off",
+  "已打开自动更新":"Automatic updates on",
+  "已关掉自动更新":"Automatic updates off",
+  "把它放到主屏幕：点 Safari 下面的分享按钮，再点“添加到主屏幕”。":"Put it on your home screen: tap Safari's Share button, then “Add to Home Screen”.",
+  "把它放到主屏幕：点浏览器菜单里的“添加到主屏幕”或“安装应用”。":"Put it on your home screen: choose “Add to Home screen” or “Install app” in the browser menu.",
+  "收藏这个页面，以后一点就开：按 <kbd>{k}</kbd>+<kbd>D</kbd>。":"Bookmark this page so it's one click away: press <kbd>{k}</kbd>+<kbd>D</kbd>. ",
+  "也可以安装成一个单独的应用，在程序坞或开始菜单里打开。":"You can also install it as its own app and open it from the Dock or Start menu.",
+  "安装成应用":"Install as app"
+};
+function t(zh, vars){
+  let s = LANG==="en" ? (EN[zh] ?? zh) : zh;
+  if(vars) s = s.replace(/\{(\w+)\}/g, (m,k)=>vars[k]!==undefined ? vars[k] : m);
+  return s;
+}
+const isEn = () => LANG==="en";
+function setUiLang(v){
+  v = v==="en" ? "en" : "zh";
+  LANG = v; try{ localStorage.setItem("lang", v); }catch{}
+  document.documentElement.lang = v==="en" ? "en" : "zh-CN";
+  document.body.classList.toggle("lang-en", v==="en");
+  // 写在 HTML 里的固定文字（data-t 记着中文原文）
+  document.querySelectorAll("[data-t]").forEach(el=>el.textContent=t(el.dataset.t));
+  document.querySelectorAll("[data-t-aria]").forEach(el=>el.setAttribute("aria-label", t(el.dataset.tAria)));
+  document.querySelectorAll("[data-t-title]").forEach(el=>el.setAttribute("title", t(el.dataset.tTitle)));
+}
 const MODES = {
   deep:{name:"精读", short:"精读", order:0}, note:{name:"写笔记", short:"笔记", order:1}, review:{name:"接着读", short:"接读", order:2},
   abstract:{name:"看摘要", short:"摘要", order:3}, scan:{name:"扫标题", short:"扫读", order:4},
 };
+const modeName = m => MODES[m] ? t(MODES[m].name) : m;
+const modeShort = m => MODES[m] ? t(MODES[m].short) : m;
 const TABS = [["today","今日"],["news","业界"],["week","本周"],["lib","论文库"],["notes","笔记"],["cfg","设置"]];
-// 快讯类别的排列顺序；方向预设可能有别的类别，没列到的排在后面
-const NEWS_CATS = ["具身智能","机器人产业","AI 模型与产品","AI 产业与资本","政策与安全","研究"];
+// 快讯类别的排列顺序；方向预设可能有别的类别，没列到的排在后面（英文版的类别名见 presets.py 的 PRESETS_EN）
+const NEWS_CATS = ["具身智能","机器人产业","AI 模型与产品","AI 产业与资本","政策与安全","研究",
+  "Embodied AI","Robotics industry","AI models & products","AI business & funding","Policy & safety","Research"];
 const TIER_MODE = {deep:"deep", abstract:"abstract", scan:"scan"};
 const STATUS = [["todo","待读"],["reading","在读"],["done","已读"],["skip","跳过"]];
+// 笔记标签存的是中文原文（旧笔记里也是），显示时再翻译
 const FLAGS = ["可 build on","方法可借鉴","反例/局限","要复现","组会分享"];
 const DEFAULT_W = {relevance:0.5, impact:0.3, buzz:0.2};
 const WEEKDAY = ["星期日","星期一","星期二","星期三","星期四","星期五","星期六"];
+const WEEKDAY_EN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const CHECK_SVG = `<svg viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="square"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg>`;
 
 const S = {ready:false, error:null, me:"", settings:null, features:{},
@@ -904,27 +1351,29 @@ if(!TABS.some(([k])=>k===S.tab)) S.tab="today";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fmtDate = d => { if(!d) return ""; const [, m, dd] = d.slice(0,10).split("-"); return `${+m}月${+dd}日`; };
-const longDate = d => { const x=new Date(d.slice(0,10)+"T00:00:00"); return `${x.getFullYear()}年${x.getMonth()+1}月${x.getDate()}日　${WEEKDAY[x.getDay()]}`; };
+const fmtDate = d => { if(!d) return ""; const [, m, dd] = d.slice(0,10).split("-"); return isEn() ? `${MONTHS_EN[+m-1]} ${+dd}` : `${+m}月${+dd}日`; };
+const longDate = d => { const x=new Date(d.slice(0,10)+"T00:00:00");
+  return isEn() ? `${WEEKDAY_EN[x.getDay()]}, ${MONTHS_EN[x.getMonth()]} ${x.getDate()}, ${x.getFullYear()}` : `${x.getFullYear()}年${x.getMonth()+1}月${x.getDate()}日　${WEEKDAY[x.getDay()]}`; };
 const venueText = v => String(v||"").replace(/\s*·\s*/g," ");
 /* 提示：普通消息一行；报错带原因和可以点的办法（后端给的 hint、actions），停留久一点 */
 function toast(x){
-  const t=$("#toast"); clearTimeout(toast._t);
+  const el=$("#toast"); clearTimeout(toast._t);
   const info = x instanceof Error ? x.info : null;
   if(info && (info.hint || (info.actions||[]).length)){
-    t.className="toast rich";
-    t.innerHTML=`<b>${esc(x.message)}</b>${info.hint?`<span class="hint">${esc(info.hint)}</span>`:""}<span class="acts">${actBtns(info.actions)}<button class="btn link" data-act="toast-close">关掉</button></span>`;
-    t.hidden=false; toast._t=setTimeout(()=>t.hidden=true,15000); return;
+    el.className="toast rich";
+    el.innerHTML=`<b>${esc(x.message)}</b>${info.hint?`<span class="hint">${esc(info.hint)}</span>`:""}<span class="acts">${actBtns(info.actions)}<button class="btn link" data-act="toast-close">${t("关掉")}</button></span>`;
+    el.hidden=false; toast._t=setTimeout(()=>el.hidden=true,15000); return;
   }
-  t.className="toast"; t.textContent = x instanceof Error ? x.message : x;
-  t.hidden=false; toast._t=setTimeout(()=>t.hidden=true, x instanceof Error ? 6000 : 3200);
+  el.className="toast"; el.textContent = x instanceof Error ? x.message : x;
+  el.hidden=false; toast._t=setTimeout(()=>el.hidden=true, x instanceof Error ? 6000 : 3200);
 }
 /* 按钮：后端用标识告诉页面能怎么修，见 core/src/robot_times/local/diagnose.py */
 const ISSUES="https://github.com/huxiaoyi-ovo/robot-times/issues/new";
 function actLabel(a){
-  if(a.startsWith("retry:")) return "重试";
-  if(a.startsWith("url:")) return /deepseek/.test(a)?"去充值":/zotero\.org/.test(a)?"下载 Zotero":/github\.com.*actions/.test(a)?"看 GitHub 上的记录":"打开网页";
-  return {setup:"去设置", logs:"看日志", doctor:"体检", restart:"重启看板", update:"更新"}[a]||a;
+  if(a.startsWith("retry:")) return t("重试");
+  if(a.startsWith("url:")) return t(/deepseek/.test(a)?"去充值":/zotero\.org/.test(a)?"下载 Zotero":/github\.com.*actions/.test(a)?"看 GitHub 上的记录":"打开网页");
+  const k={setup:"去设置", logs:"看日志", doctor:"体检", restart:"重启看板", update:"更新"}[a];
+  return k ? t(k) : a;
 }
 function actOk(a){
   if(["setup","logs","restart"].includes(a)) return isLocal();
@@ -936,17 +1385,17 @@ const actBtns = (acts, cls="btn") => (acts||[]).filter(actOk).map(a=>`<button cl
 
 async function api(path, opts={}){
   let resp;
-  try{ resp = await fetch(path, {...opts, headers:{"content-type":"application/json", ...(opts.headers||{})}, credentials:"same-origin"}); }
+  try{ resp = await fetch(path, {...opts, headers:{"content-type":"application/json", "x-lang":LANG, ...(opts.headers||{})}, credentials:"same-origin"}); }
   catch(e){
-    const err=new Error(isLocal()?"连不上看板：它可能停了。":"连不上服务器，或者登录过期了，请刷新页面。");
-    if(isLocal()) err.info={hint:"重新打开 The Robot Times 应用（或者重启电脑），再刷新这个页面。", actions:[]};
+    const err=new Error(isLocal()?t("连不上看板：它可能停了。"):t("连不上服务器，或者登录过期了，请刷新页面。"));
+    if(isLocal()) err.info={hint:t("重新打开 The Robot Times 应用（或者重启电脑），再刷新这个页面。"), actions:[]};
     throw err;
   }
-  if(resp.status===401 || (resp.redirected && !resp.url.includes("/api/"))) throw new Error("登录已过期，请刷新页面。");
+  if(resp.status===401 || (resp.redirected && !resp.url.includes("/api/"))) throw new Error(t("登录已过期，请刷新页面。"));
   const ct = resp.headers.get("content-type")||"";
-  if(!ct.includes("application/json")){ if(!resp.ok) throw new Error(`请求失败：HTTP ${resp.status}`); return resp; }
+  if(!ct.includes("application/json")){ if(!resp.ok) throw new Error(t("请求失败：HTTP {s}",{s:resp.status})); return resp; }
   const data = await resp.json();
-  if(!resp.ok){ const err=new Error(data.error || `请求失败：HTTP ${resp.status}`); err.info={hint:data.hint||"", actions:data.actions||[]}; throw err; }
+  if(!resp.ok){ const err=new Error(data.error || t("请求失败：HTTP {s}",{s:resp.status})); err.info={hint:data.hint||"", actions:data.actions||[]}; throw err; }
   return data;
 }
 
@@ -964,28 +1413,28 @@ const noteOf = id => S.notes[id] || {};
 const statusOf = id => noteOf(id).status || "todo";
 const isRead = id => ["done","skip"].includes(statusOf(id));
 const fmt1 = v => v==null ? "—" : (+v).toFixed(1).replace(/\.0$/,"");
-function scoreTitle(p){ const s=p.scores||{}; return `相关 ${fmt1(s.rel)}${s.llm!=null?`，模型判断 ${fmt1(s.llm)}`:""}，影响 ${fmt1(s.impact)}，热度 ${fmt1(s.buzz)}`; }
-const scoreEl = p => `<span class="score" title="${esc(scoreTitle(p))}"><b>${total(p).toFixed(1)}</b>综合</span>`;
+function scoreTitle(p){ const s=p.scores||{}; return t("相关 {r}",{r:fmt1(s.rel)})+(s.llm!=null?t("，模型判断 {l}",{l:fmt1(s.llm)}):"")+t("，影响 {i}，热度 {b}",{i:fmt1(s.impact),b:fmt1(s.buzz)}); }
+const scoreEl = p => `<span class="score" title="${esc(scoreTitle(p))}"><b>${total(p).toFixed(1)}</b>${t("综合")}</span>`;
 
 /* ---------- 小部件 ---------- */
-function authorsShort(p){ const a=p.authors||[]; return a.length>3 ? `${a.slice(0,2).join(", ")} 等 ${a.length} 人` : a.join(", "); }
+function authorsShort(p){ const a=p.authors||[]; return a.length>3 ? t("{names} 等 {n} 人",{names:a.slice(0,2).join(", "), n:a.length}) : a.join(", "); }
 function meta(p, full){
   const bits=[esc(full?(p.authors||[]).join(", "):authorsShort(p))];
   if(p.venue) bits.push(`<span class="v">${esc(venueText(p.venue))}</span>`);
   if(p.date) bits.push(esc(fmtDate(p.date)));
   if(p.signals) bits.push(esc(p.signals));
-  return `<p class="meta">${bits.join("，")}</p>`;
+  return `<p class="meta">${bits.join(t("，"))}</p>`;
 }
 function stamps(id){
   const st=statusOf(id), out=[];
-  if(st==="reading") out.push(`<span class="stamp reading">在读</span>`);
-  if(st==="done") out.push(`<span class="stamp done">已读</span>`);
-  if(S.zotero[id]) out.push(`<span class="stamp z">已入 Zotero</span>`);
+  if(st==="reading") out.push(`<span class="stamp reading">${t("在读")}</span>`);
+  if(st==="done") out.push(`<span class="stamp done">${t("已读")}</span>`);
+  if(S.zotero[id]) out.push(`<span class="stamp z">${t("已入 Zotero")}</span>`);
   return out.join("");
 }
 function checkBtn(id){
   const st=statusOf(id);
-  return `<button class="check${st==="reading"?" half":""}" data-toggle="${esc(id)}" aria-pressed="${st==="done"}" title="${st==="done"?"已读，点一下改回待读":"标为已读"}" aria-label="标为已读">${CHECK_SVG}</button>`;
+  return `<button class="check${st==="reading"?" half":""}" data-toggle="${esc(id)}" aria-pressed="${st==="done"}" title="${st==="done"?t("已读，点一下改回待读"):t("标为已读")}" aria-label="${t("标为已读")}">${CHECK_SVG}</button>`;
 }
 /* 截到 n 字以内：尽量停在句末，英文不截断单词，截了就加省略号 */
 function clip(t, n){
@@ -993,7 +1442,7 @@ function clip(t, n){
   const cut=t.slice(0,n), end=Math.max(...[..."。！？.!?"].map(c=>cut.lastIndexOf(c)));
   return end>n*0.5 ? cut.slice(0,end+1) : cut.replace(/\s+\S*$/,"")+"…";
 }
-/* 导语：大模型写的中文摘要；没有（精排失败）才用英文摘要。列表接口不带 abstractZh */
+/* 导语：大模型写的要点；没有（精排失败）才用原文摘要。列表接口不带 abstractZh */
 const ledeOf = (p, n) => p.summary || clip(p.abstract, n);
 const zhSub = p => p.titleZh ? `<p class="zh-sub">${esc(p.titleZh)}</p>` : "";
 const titleBtn = (p, cls="") => `<button class="hit ${cls}" data-open="${esc(p.id)}"><span class="ul">${esc(p.title)}</span></button>`;
@@ -1016,13 +1465,13 @@ function strip(secs){
   const papers=new Set(secs.filter(s=>s.mode!=="note").flatMap(s=>s.ids));
   const done=[...papers].filter(isRead).length;
   const target = m => m==="note"||m==="deep" ? "lead" : m==="scan" ? "briefs" : m==="abstract" ? "second" : "lead";
-  return `<section class="strip" aria-label="今天的阅读时间">
-    <div class="strip-top"><span><b>${tot} 分钟</b>　今天的阅读计划</span><span>已读 ${done} / ${papers.size}</span></div>
+  return `<section class="strip" aria-label="${t("今天的阅读时间")}">
+    <div class="strip-top"><span><b>${t("{n} 分钟",{n:tot})}</b>　${t("今天的阅读计划")}</span><span>${t("已读 {a} / {b}",{a:done,b:papers.size})}</span></div>
     <div class="bars">${secs.map(s=>{
       const cells = s.mode==="note" ? [!!(noteOf(s.ids[0]).note||"").trim()] : s.ids.map(isRead);
-      return `<button class="bar ${s.mode}" style="flex:${Math.max(s.minutes,5)}" data-jump="${target(s.mode)}" title="${esc(MODES[s.mode]?.name||s.mode)}，${s.minutes} 分钟">
+      return `<button class="bar ${s.mode}" style="flex:${Math.max(s.minutes,5)}" data-jump="${target(s.mode)}" title="${esc(modeName(s.mode))}${t("，")}${t("{n} 分钟",{n:s.minutes})}">
         <span class="cells">${cells.map(on=>`<i class="${on?"on":""}"></i>`).join("")}</span>
-        <span class="bar-label"><b><span class="full-name">${esc(MODES[s.mode]?.name||s.mode)}</span><span class="short">${esc(MODES[s.mode]?.short||s.mode)}</span></b><span class="m">${s.minutes} 分钟</span></span></button>`;
+        <span class="bar-label"><b><span class="full-name">${esc(modeName(s.mode))}</span><span class="short">${esc(modeShort(s.mode))}</span></b><span class="m">${t("{n} 分钟",{n:s.minutes})}</span></span></button>`;
     }).join("")}</div>
   </section>`;
 }
@@ -1030,19 +1479,19 @@ function leadStory(p, sec, noteSec){
   const st=statusOf(p.id), hasNote=(noteOf(p.id).note||"").trim();
   const minutes=sec.minutes+(noteSec?.minutes||0);
   return `<article class="lead" id="lead">
-    <p class="kicker">精读<span class="min">${minutes} 分钟，其中 ${noteSec?.minutes||0} 分钟写笔记</span></p>
+    <p class="kicker">${t("精读")}<span class="min">${t("{n} 分钟，其中 {m} 分钟写笔记",{n:minutes,m:noteSec?.minutes||0})}</span></p>
     <h3>${titleBtn(p)}${stamps(p.id)}</h3>
     ${zhSub(p)}
     ${meta(p)}
-    ${p.cover?`<figure class="lead-fig"><button class="img" data-open="${esc(p.id)}" aria-label="打开这篇论文"><img src="${esc(p.cover.src)}" alt="${esc(p.cover.label||"")}" decoding="async" onerror="this.closest('figure').remove()"></button><figcaption>${esc(p.cover.label||"")}${p.cover.caption?`　${esc(p.cover.caption.slice(0,160))}${p.cover.caption.length>160?"…":""}`:""}<span class="credit">图：论文原图，来自 arXiv</span></figcaption></figure>`:""}
+    ${p.cover?`<figure class="lead-fig"><button class="img" data-open="${esc(p.id)}" aria-label="${t("打开这篇论文")}"><img src="${esc(p.cover.src)}" alt="${esc(p.cover.label||"")}" decoding="async" onerror="this.closest('figure').remove()"></button><figcaption>${esc(p.cover.label||"")}${p.cover.caption?`　${esc(p.cover.caption.slice(0,160))}${p.cover.caption.length>160?"…":""}`:""}<span class="credit">${t("图：论文原图，来自 arXiv")}</span></figcaption></figure>`:""}
     <p class="lede">${esc(ledeOf(p,420))}</p>
-    ${p.why?`<blockquote class="pull"><small>为什么推荐给你</small>${esc(p.why)}</blockquote>`:""}
-    ${p.tip?`<p class="howto"><b>怎么读</b>${esc(p.tip)}</p>`:""}
+    ${p.why?`<blockquote class="pull"><small>${t("为什么推荐给你")}</small>${esc(p.why)}</blockquote>`:""}
+    ${p.tip?`<p class="howto"><b>${t("怎么读")}</b>${esc(p.tip)}</p>`:""}
     <div class="lead-foot">
-      ${p.pdf?`<a class="btn pri" href="${esc(p.pdf)}" target="_blank" rel="noopener">打开 PDF</a>`:""}
-      ${st==="done"?"":`<button class="btn" data-setst="${esc(p.id)}" data-v="${st==="reading"?"done":"reading"}">${st==="reading"?"读完了":"开始读"}</button>`}
-      <button class="btn" data-open="${esc(p.id)}" data-focus="note">${hasNote?"看笔记":"写笔记"}</button>
-      ${S.zotero[p.id]||!S.features.zotero?"":`<button class="btn link" data-zadd="${esc(p.id)}">加入 Zotero</button>`}
+      ${p.pdf?`<a class="btn pri" href="${esc(p.pdf)}" target="_blank" rel="noopener">${t("打开 PDF")}</a>`:""}
+      ${st==="done"?"":`<button class="btn" data-setst="${esc(p.id)}" data-v="${st==="reading"?"done":"reading"}">${st==="reading"?t("读完了"):t("开始读")}</button>`}
+      <button class="btn" data-open="${esc(p.id)}" data-focus="note">${hasNote?t("看笔记"):t("写笔记")}</button>
+      ${S.zotero[p.id]||!S.features.zotero?"":`<button class="btn link" data-zadd="${esc(p.id)}">${t("加入 Zotero")}</button>`}
     </div>
   </article>`;
 }
@@ -1060,10 +1509,10 @@ function briefItem(p, opts={}){
   return `<li class="brief${isRead(p.id)?" read":""}${st==="skip"?" skipped":""}">
     <span class="n" aria-hidden="true"></span>
     <div>
-      ${p.topic&&p.topic!=="其他"?`<p class="tk">${esc(p.topic)}</p>`:""}<div class="t">${titleBtn(p)}</div>${zhSub(p)}
+      ${p.topic&&p.topic!=="其他"&&p.topic!=="Other"?`<p class="tk">${esc(p.topic)}</p>`:""}<div class="t">${titleBtn(p)}</div>${zhSub(p)}
       <p class="why">${esc(p.why||p.summary||"")}</p>
       <div class="row2">${checkBtn(p.id)}
-        ${opts.noSkip?"":st==="skip"?`<button class="x" data-unskip="${esc(p.id)}">撤销跳过</button>`:`<button class="x" data-skip="${esc(p.id)}" title="跳过，并少推这类论文">× 不相关</button>`}</div>
+        ${opts.noSkip?"":st==="skip"?`<button class="x" data-unskip="${esc(p.id)}">${t("撤销跳过")}</button>`:`<button class="x" data-skip="${esc(p.id)}" title="${t("跳过，并少推这类论文")}">${t("× 不相关")}</button>`}</div>
     </div>
   </li>`;
 }
@@ -1076,7 +1525,7 @@ function coverBtn(p, cls, lazy){
 function pkgLead(p, sec, noteSec){
   const st=statusOf(p.id), hasNote=(noteOf(p.id).note||"").trim();
   const minutes=sec.minutes+(noteSec?.minutes||0);
-  const rel = (p.why||p.tip) ? `<ul class="rel">${p.why?`<li><b>为什么推荐</b>${esc(p.why)}</li>`:""}${p.tip?`<li><b>怎么读</b>${esc(p.tip)}</li>`:""}</ul>` : "";
+  const rel = (p.why||p.tip) ? `<ul class="rel">${p.why?`<li><b>${t("为什么推荐")}</b>${esc(p.why)}</li>`:""}${p.tip?`<li><b>${t("怎么读")}</b>${esc(p.tip)}</li>`:""}</ul>` : "";
   const fig = p.cover ? `<figure class="pl-fig">${coverBtn(p,"pimg")}<figcaption class="credit">${esc(p.cover.label||"")}　arXiv ${esc(p.id)}</figcaption></figure>` : "";
   return `<div class="pl${fig?"":" noimg"}">
     <div class="pl-text">
@@ -1084,13 +1533,13 @@ function pkgLead(p, sec, noteSec){
       ${stamps(p.id)?`<p class="stamps">${stamps(p.id)}</p>`:""}
       ${zhSub(p)}
       <p class="psum">${esc(ledeOf(p,320))}</p>
-      ${mline(`精读 ${minutes} 分钟`, esc(venueText(p.venue)))}
+      ${mline(t("精读 {n} 分钟",{n:minutes}), esc(venueText(p.venue)))}
       ${fig?"":rel}
       <div class="acts">
-        ${p.pdf?`<a class="btn pri" href="${esc(p.pdf)}" target="_blank" rel="noopener">打开 PDF</a>`:""}
-        ${st==="done"?"":`<button class="btn" data-setst="${esc(p.id)}" data-v="${st==="reading"?"done":"reading"}">${st==="reading"?"读完了":"开始读"}</button>`}
-        <button class="btn" data-open="${esc(p.id)}" data-focus="note">${hasNote?"看笔记":"写笔记"}</button>
-        ${S.zotero[p.id]||!S.features.zotero?"":`<button class="btn link" data-zadd="${esc(p.id)}">加入 Zotero</button>`}
+        ${p.pdf?`<a class="btn pri" href="${esc(p.pdf)}" target="_blank" rel="noopener">${t("打开 PDF")}</a>`:""}
+        ${st==="done"?"":`<button class="btn" data-setst="${esc(p.id)}" data-v="${st==="reading"?"done":"reading"}">${st==="reading"?t("读完了"):t("开始读")}</button>`}
+        <button class="btn" data-open="${esc(p.id)}" data-focus="note">${hasNote?t("看笔记"):t("写笔记")}</button>
+        ${S.zotero[p.id]||!S.features.zotero?"":`<button class="btn link" data-zadd="${esc(p.id)}">${t("加入 Zotero")}</button>`}
       </div>
     </div>
     ${fig?`<div class="pl-side">${fig}${rel}</div>`:""}
@@ -1102,7 +1551,7 @@ function pkgItem(p, mode){
       <h3 class="ht">${titleBtn(p)}</h3>
       ${zhSub(p)}
       ${p.summary?`<p class="isum">${esc(p.summary)}</p>`:""}
-      <div class="pi-foot">${checkBtn(p.id)}${mline(`${MODES[mode]?.name||"看摘要"} ${MIN_OF[p.tier]||5} 分钟`)}${stamps(p.id)}</div>
+      <div class="pi-foot">${checkBtn(p.id)}${mline(`${MODES[mode]?modeName(mode):t("看摘要")} · ${t("{n} 分钟",{n:MIN_OF[p.tier]||5})}`)}${stamps(p.id)}</div>
     </div>
     ${coverBtn(p,"pthumb",true)}
   </article>`;
@@ -1113,21 +1562,21 @@ function planRail(secs){
   const papers=new Set(secs.filter(s=>s.mode!=="note").flatMap(s=>s.ids));
   const done=[...papers].filter(isRead).length;
   const target = m => m==="note"||m==="deep" ? "lead" : m==="scan" ? "briefs" : m==="abstract" ? "second" : "lead";
-  return `<section class="rsect" aria-label="今天的阅读计划">
-    <p class="lbl">今天的阅读计划<span>${tot} 分钟，已读 ${done} / ${papers.size}</span></p>
+  return `<section class="rsect" aria-label="${t("今天的阅读计划")}">
+    <p class="lbl">${t("今天的阅读计划")}<span>${t("{n} 分钟，已读 {a} / {b}",{n:tot,a:done,b:papers.size})}</span></p>
     <ul class="plan-rail">${secs.map(s=>{
       const cells = s.mode==="note" ? [!!(noteOf(s.ids[0]).note||"").trim()] : s.ids.map(isRead);
-      return `<li><button class="bar ${s.mode}" data-jump="${target(s.mode)}"><span class="pn">${esc(MODES[s.mode]?.name||s.mode)}</span><span class="cells">${cells.map(on=>`<i class="${on?"on":""}"></i>`).join("")}</span><span class="pm">${s.minutes} 分钟</span></button></li>`;
+      return `<li><button class="bar ${s.mode}" data-jump="${target(s.mode)}"><span class="pn">${esc(modeName(s.mode))}</span><span class="cells">${cells.map(on=>`<i class="${on?"on":""}"></i>`).join("")}</span><span class="pm">${t("{n} 分钟",{n:s.minutes})}</span></button></li>`;
     }).join("")}</ul>
   </section>`;
 }
 function viewToday(){
-  if(!S.days.length) return emptyBox("今天的早报还没出",
+  if(!S.days.length) return emptyBox(t("今天的早报还没出"),
     (isLocal()
-      ? `电脑开着时，工作日上午 9:30 以后自动生成（不用打开这个页面）：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 ${S.settings?.dailyMinutes||60} 分钟的阅读计划。第一次要几分钟（要下载向量模型），生成好会自动显示。`
-      : `工作日上午 9:40 左右（北京时间）自动生成：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 ${S.settings?.dailyMinutes||60} 分钟的阅读计划。`
-        + (S.features.run?"":" 第一次可以去 GitHub 仓库的 Actions → daily → Run workflow 手动生成。")))
-    + (S.features.run?`<div class="actions" style="margin-top:12px">${runBtn("daily","现在生成今天的推荐")}</div>`:"");
+      ? t("电脑开着时，工作日上午 9:30 以后自动生成（不用打开这个页面）：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 {n} 分钟的阅读计划。第一次要几分钟（要下载向量模型），生成好会自动显示。",{n:S.settings?.dailyMinutes||60})
+      : t("工作日上午 9:40 左右（北京时间）自动生成：从 arXiv 抓新论文，结合你的 Zotero 文献库打分，排好 {n} 分钟的阅读计划。",{n:S.settings?.dailyMinutes||60})
+        + (S.features.run?"":t(" 第一次可以去 GitHub 仓库的 Actions → daily → Run workflow 手动生成。"))))
+    + (S.features.run?`<div class="actions" style="margin-top:12px">${runBtn("daily",t("现在生成今天的推荐"))}</div>`:"");
   const day=S.days[Math.min(S.dayIdx,S.days.length-1)];
   const secs=sectionsOf(day), st=day.stats||{};
   const get=m=>secs.find(s=>s.mode===m);
@@ -1136,27 +1585,27 @@ function viewToday(){
   const older=S.dayIdx<S.days.length-1, newer=S.dayIdx>0;
   const leadP=deep?.ids.map(id=>S.papers[id])[0];
   const others=secs.filter(s=>!["deep","note","abstract","scan","review"].includes(s.mode));
-  const block=(s,label,id)=>s?.ids.length?`<div class="pkg-more"${id?` id="${id}"`:""}><p class="lbl">${label}<span>${s.minutes} 分钟</span></p><div class="pgrid">${s.ids.map(id=>pkgItem(S.papers[id], s.mode)).join("")}</div></div>`:"";
+  const block=(s,label,id)=>s?.ids.length?`<div class="pkg-more"${id?` id="${id}"`:""}><p class="lbl">${label}<span>${t("{n} 分钟",{n:s.minutes})}</span></p><div class="pgrid">${s.ids.map(id=>pkgItem(S.papers[id], s.mode)).join("")}</div></div>`:"";
   return `<div class="front2">
     <div class="fmain">
       <section class="pkg" id="lead">
-        <p class="pkg-h"><span>${esc(longDate(day.date).replace("　"," "))}的早报</span></p>
+        <p class="pkg-h"><span>${t("{d}的早报",{d:esc(longDate(day.date).replace("　"," "))})}</span></p>
         ${leadP?pkgLead(leadP, deep, note):""}
-        ${block(abs,"看摘要","second")}
+        ${block(abs,t("看摘要"),"second")}
       </section>
-      ${review?.ids.length?`<section class="fsect">${block(review,"接着读")}</section>`:""}
-      ${others.map(s=>`<section class="fsect">${block(s, MODES[s.mode]?.name||s.mode)}</section>`).join("")}
+      ${review?.ids.length?`<section class="fsect">${block(review,t("接着读"))}</section>`:""}
+      ${others.map(s=>`<section class="fsect">${block(s, modeName(s.mode))}</section>`).join("")}
       ${industryBand("news")}
     </div>
     <aside class="frail">
       <article class="feature">
-        <p class="pager-s"><button data-day="1" ${older?"":"disabled"} aria-label="前一期">‹</button><span>从 ${st.candidates??"?"} 篇新论文中选出 ${(day.picks||[]).length} 篇</span><button data-day="-1" ${newer?"":"disabled"} aria-label="后一期">›</button></p>
-        <h2 class="fh">${esc(day.headline||"今日推荐")}</h2>
+        <p class="pager-s"><button data-day="1" ${older?"":"disabled"} aria-label="${t("前一期")}">‹</button><span>${t("从 {a} 篇新论文中选出 {b} 篇",{a:st.candidates??"?",b:(day.picks||[]).length})}</span><button data-day="-1" ${newer?"":"disabled"} aria-label="${t("后一期")}">›</button></p>
+        <h2 class="fh">${esc(day.headline||t("今日推荐"))}</h2>
         ${day.intro?`<p class="fsum">${esc(day.intro)}</p>`:""}
         ${(st.problems||[]).map(x=>`<p class="warn">${esc(x)}</p>`).join("")}
       </article>
       ${planRail(secs)}
-      ${scan?.ids.length?`<section class="rsect" id="briefs"><p class="lbl">简讯<span>扫标题 ${scan.minutes} 分钟</span></p><ol class="rlist">${scan.ids.map(id=>briefItem(S.papers[id])).join("")}</ol></section>`:""}
+      ${scan?.ids.length?`<section class="rsect" id="briefs"><p class="lbl">${t("简讯")}<span>${t("扫标题 {n} 分钟",{n:scan.minutes})}</span></p><ol class="rlist">${scan.ids.map(id=>briefItem(S.papers[id])).join("")}</ol></section>`:""}
     </aside>
   </div>
   ${industryBand("deep")}`;
@@ -1165,10 +1614,10 @@ function viewToday(){
 /* ---------- 业界 ---------- */
 function ago(iso){
   if(!iso) return "";
-  const t=new Date(iso), h=(Date.now()-t)/36e5;
-  if(h<1) return "刚刚";
-  if(h<24) return `${Math.floor(h)} 小时前`;
-  return `${t.getMonth()+1}月${t.getDate()}日`;
+  const d=new Date(iso), h=(Date.now()-d)/36e5;
+  if(h<1) return t("刚刚");
+  if(h<24) return t("{n} 小时前",{n:Math.floor(h)});
+  return isEn() ? `${MONTHS_EN[d.getMonth()]} ${d.getDate()}` : `${d.getMonth()+1}月${d.getDate()}日`;
 }
 function newsItem(it, opts={}){
   const orig = it.title && it.title!==it.titleZh && it.lang!=="zh" ? `<span class="orig">${esc(it.title)}</span>` : "";
@@ -1179,7 +1628,7 @@ function newsItem(it, opts={}){
     ${opts.orig===false?"":orig}
     ${it.summary?`<p class="sum">${esc(it.summary)}</p>`:""}
     ${it.why&&opts.why!==false?`<p class="why">${esc(it.why)}</p>`:""}
-    <span class="src">${esc(it.source||"")}${it.published?`，${esc(ago(it.published))}`:""}${it.discussion?`，<a href="${esc(it.discussion)}" target="_blank" rel="noopener">讨论${it.points?` ${+it.points} 分`:""}</a>`:""}</span>
+    <span class="src">${esc(it.source||"")}${it.published?`${t("，")}${esc(ago(it.published))}`:""}${it.discussion?`${t("，")}<a href="${esc(it.discussion)}" target="_blank" rel="noopener">${t("讨论")}${it.points?` ${t("{n} 分",{n:+it.points})}`:""}</a>`:""}</span>
   </article>`;
 }
 function industryBand(part){
@@ -1191,10 +1640,10 @@ function industryBand(part){
   const src=it=>`${esc(it.source||"")}${it.published?`　${esc(ago(it.published))}`:""}`;
   const head=(it,cls="ht")=>`<a class="${cls} hit" href="${esc(it.url)}" target="_blank" rel="noopener"><span class="ul">${esc(it.titleZh||it.title)}</span></a>`;
   const thumb=it=>it.image?`<a class="nthumb" href="${esc(it.url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true"><img src="${esc(it.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></a>`:"";
-  if(part==="deep") return deeps.length?`<section class="sect"><div class="sect-h"><h2>深度</h2><button class="more" data-tab="news">业界全部 ${news.length+deeps.length} 条 ›</button></div><div class="cards">${deeps.slice(0,5).map(it=>`<article class="card">${it.image?`<a class="cimg" href="${esc(it.url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true"><img src="${esc(it.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></a>`:""}<p class="tk">${esc(it.source||"")}</p>${head(it)}${it.summary?`<p class="isum">${esc(it.summary)}</p>`:""}</article>`).join("")}</div></section>`:"";
+  if(part==="deep") return deeps.length?`<section class="sect"><div class="sect-h"><h2>${t("深度")}</h2><button class="more" data-tab="news">${t("业界全部 {n} 条 ›",{n:news.length+deeps.length})}</button></div><div class="cards">${deeps.slice(0,5).map(it=>`<article class="card">${it.image?`<a class="cimg" href="${esc(it.url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true"><img src="${esc(it.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></a>`:""}<p class="tk">${esc(it.source||"")}</p>${head(it)}${it.summary?`<p class="isum">${esc(it.summary)}</p>`:""}</article>`).join("")}</div></section>`:"";
   if(!news.length) return "";
   return `<section class="sect">
-    <div class="sect-h"><h2>业界</h2><button class="more" data-tab="news">全部 ${news.length+deeps.length} 条 ›</button></div>
+    <div class="sect-h"><h2>${t("业界")}</h2><button class="more" data-tab="news">${t("全部 {n} 条 ›",{n:news.length+deeps.length})}</button></div>
     ${lead?`<div class="mn${withImg?"":" noimg"}">
       <article class="mn-lead"><p class="tk">${esc(lead.category||"")}</p>${head(lead,"hl")}${lead.summary?`<p class="psum">${esc(lead.summary)}</p>`:""}${mline(src(lead))}</article>
       ${withImg?`<figure class="mn-fig"><a href="${esc(withImg.url)}" target="_blank" rel="noopener" tabindex="-1"><img src="${esc(withImg.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.closest('figure').remove()"></a><figcaption class="credit">${esc(withImg.source||"")}</figcaption></figure>`:""}
@@ -1208,15 +1657,15 @@ async function loadNews(date){
   const d=await api(`/api/news/${date}`); S.newsCache[date]=d; return d;
 }
 function viewNews(){
-  if(!S.newsDates.length) return emptyBox("还没有业界简报",(isLocal()?"电脑开着时每天早上 8 点以后自动生成：":"每天早上 8:20 左右（北京时间）自动生成：")+"从和你方向有关的行业媒体、公司博客、AIHOT、Hacker News，以及 Substack 等深度文章里挑出今天值得看的，配中文标题和摘要。"+(isLocal()?"":"第一次可以去 GitHub 仓库的 Actions → news → Run workflow 手动生成。"));
+  if(!S.newsDates.length) return emptyBox(t("还没有业界简报"),(isLocal()?t("电脑开着时每天早上 8 点以后自动生成："):t("每天早上 8:20 左右（北京时间）自动生成："))+t("从和你方向有关的行业媒体、公司博客、AIHOT、Hacker News，以及 Substack 等深度文章里挑出今天值得看的，配中文标题和摘要。")+(isLocal()?"":t("第一次可以去 GitHub 仓库的 Actions → news → Run workflow 手动生成。")));
   const date=S.newsDates[Math.min(S.newsIdx,S.newsDates.length-1)];
   const n=S.newsCache[date];
-  if(!n){ loadNews(date).then(()=>{ if(S.tab==="news") render(); }).catch(e=>toast(e)); return `<p class="mute">载入中…</p>`; }
+  if(!n){ loadNews(date).then(()=>{ if(S.tab==="news") render(); }).catch(e=>toast(e)); return `<p class="mute">${t("载入中…")}</p>`; }
   const older=S.newsIdx<S.newsDates.length-1, newer=S.newsIdx>0;
   const cats=[...new Set([...NEWS_CATS,...(n.news||[]).map(it=>it.category)])];
   const groups=cats.map(c=>[c,(n.news||[]).filter(it=>it.category===c)]).filter(([,xs])=>xs.length);
   const ok=(n.sources||[]).filter(x=>x.ok), bad=(n.sources||[]).filter(x=>!x.ok);
-  const src=it=>`${esc(it.source||"")}${it.published?`<i aria-hidden="true">·</i>${esc(ago(it.published))}`:""}${it.discussion?`<i aria-hidden="true">·</i><a href="${esc(it.discussion)}" target="_blank" rel="noopener">讨论${it.points?` ${+it.points}`:""}</a>`:""}`;
+  const src=it=>`${esc(it.source||"")}${it.published?`<i aria-hidden="true">·</i>${esc(ago(it.published))}`:""}${it.discussion?`<i aria-hidden="true">·</i><a href="${esc(it.discussion)}" target="_blank" rel="noopener">${t("讨论")}${it.points?` ${+it.points}`:""}</a>`:""}`;
   const row=(it,c)=>`<article class="nr">
       <div class="nr-text">${c?`<p class="tk">${esc(c)}</p>`:""}<a class="ht hit" href="${esc(it.url)}" target="_blank" rel="noopener"><span class="ul">${esc(it.titleZh||it.title)}</span></a>
         ${it.title&&it.title!==it.titleZh&&it.lang!=="zh"?`<p class="orig2">${esc(it.title)}</p>`:""}
@@ -1231,12 +1680,12 @@ function viewNews(){
   const orig=it=>it.title&&it.title!==it.titleZh&&it.lang!=="zh"?`<p class="orig2">${esc(it.title)}</p>`:"";
   const flat=groups.flatMap(([c,xs])=>xs.map(it=>[c,it]));
   return `<header class="secfront">
-      <h1 class="sec-title">业界</h1>
-      <p class="sec-dek">和你方向有关的行业每天发生了什么。深度长文放在前面，快讯按类别排；标题和摘要由大模型根据原文写成，数字请以原文为准。</p>
-      <p class="pager-s wide"><button data-nday="1" ${older?"":"disabled"} aria-label="前一天">‹</button><span>${esc(longDate(date).replace("　"," "))}　从 ${n.stats?.candidates??"?"} 条里选出深度 ${deeps.length} 篇、快讯 ${(n.news||[]).length} 条</span><button data-nday="-1" ${newer?"":"disabled"} aria-label="后一天">›</button></p>
+      <h1 class="sec-title">${t("业界")}</h1>
+      <p class="sec-dek">${t("和你方向有关的行业每天发生了什么。深度长文放在前面，快讯按类别排；标题和摘要由大模型根据原文写成，数字请以原文为准。")}</p>
+      <p class="pager-s wide"><button data-nday="1" ${older?"":"disabled"} aria-label="${t("前一天")}">‹</button><span>${esc(longDate(date).replace("　"," "))}　${t("从 {c} 条里选出深度 {d} 篇、快讯 {n} 条",{c:n.stats?.candidates??"?",d:deeps.length,n:(n.news||[]).length})}</span><button data-nday="-1" ${newer?"":"disabled"} aria-label="${t("后一天")}">›</button></p>
     </header>
     ${dlead?`<section class="sect deep-sect">
-      <div class="sect-h"><h2>深度</h2><span class="cnt">分析机构、投资人和研究者的长文</span></div>
+      <div class="sect-h"><h2>${t("深度")}</h2><span class="cnt">${t("分析机构、投资人和研究者的长文")}</span></div>
       <article class="dlead${dlead.image?"":" noimg"}">
         <div class="dl-text"><p class="tk">${esc(dlead.source||"")}</p>${link(dlead,"hl")}${orig(dlead)}${dlead.summary?`<p class="psum">${esc(dlead.summary)}</p>`:""}${dlead.why?`<p class="nwhy">${esc(dlead.why)}</p>`:""}${mline(dlead.published?esc(ago(dlead.published)):"")}</div>
         ${img(dlead,"dl-img")}
@@ -1244,16 +1693,16 @@ function viewNews(){
       ${drest.length?`<div class="dgrid">${drest.map(it=>`<article class="dcard">${img(it,"cimg")}<p class="tk">${esc(it.source||"")}</p>${link(it,"ht")}${orig(it)}${it.summary?`<p class="isum">${esc(it.summary)}</p>`:""}${it.why?`<p class="nwhy">${esc(it.why)}</p>`:""}</article>`).join("")}</div>`:""}
     </section>`:""}
     <section class="sect">
-      <div class="sect-h"><h2>快讯</h2><span class="cnt">${(n.news||[]).length} 条，按类别排，每类里重要的在前</span></div>
-      ${flat.length?`<div class="ngrid">${flat.map(([c,it])=>`<article class="nb"><p class="tk">${esc(c)}</p>${link(it,"ht")}${it.summary?`<p class="isum">${esc(it.summary)}</p>`:""}<p class="mline">${esc(it.source||"")}${it.published?`<i aria-hidden="true">·</i>${esc(ago(it.published))}`:""}${it.discussion?`<i aria-hidden="true">·</i><a href="${esc(it.discussion)}" target="_blank" rel="noopener">讨论${it.points?` ${+it.points}`:""}</a>`:""}</p></article>`).join("")}</div>`:`<p class="mute">今天没有值得放进来的快讯。</p>`}
+      <div class="sect-h"><h2>${t("快讯")}</h2><span class="cnt">${t("{n} 条，按类别排，每类里重要的在前",{n:(n.news||[]).length})}</span></div>
+      ${flat.length?`<div class="ngrid">${flat.map(([c,it])=>`<article class="nb"><p class="tk">${esc(c)}</p>${link(it,"ht")}${it.summary?`<p class="isum">${esc(it.summary)}</p>`:""}<p class="mline">${esc(it.source||"")}${it.published?`<i aria-hidden="true">·</i>${esc(ago(it.published))}`:""}${it.discussion?`<i aria-hidden="true">·</i><a href="${esc(it.discussion)}" target="_blank" rel="noopener">${t("讨论")}${it.points?` ${+it.points}`:""}</a>`:""}</p></article>`).join("")}</div>`:`<p class="mute">${t("今天没有值得放进来的快讯。")}</p>`}
     </section>
-    <p class="health"><b>今天的来源</b>　${ok.map(x=>`${esc(x.name)} ${x.count}`).join("，")}${bad.length?`<br><b>没抓到</b>　${bad.map(x=>esc(x.name)).join("，")}（下次会再试）`:""}</p>`;
+    <p class="health"><b>${t("今天的来源")}</b>　${ok.map(x=>`${esc(x.name)} ${x.count}`).join(t("，"))}${bad.length?`<br><b>${t("没抓到")}</b>　${bad.map(x=>esc(x.name)).join(t("，"))}${t("（下次会再试）")}`:""}</p>`;
 }
 
 /* ---------- 本周 ---------- */
 function viewWeek(){
-  if(!S.weeks.length) return emptyBox("还没有周报",(isLocal()?"每周日晚上 6 点后自动生成（错过了会在下周补上）：":"每周日晚上 8 点左右（北京时间）自动生成：")+"这一周你的方向发生了什么、你读了哪些、下周每天读什么。")
-    + (S.features.run?`<div class="actions" style="margin-top:12px">${runBtn("weekly","现在生成本周回顾")}</div>`:"");
+  if(!S.weeks.length) return emptyBox(t("还没有周报"),(isLocal()?t("每周日晚上 6 点后自动生成（错过了会在下周补上）："):t("每周日晚上 8 点左右（北京时间）自动生成："))+t("这一周你的方向发生了什么、你读了哪些、下周每天读什么。"))
+    + (S.features.run?`<div class="actions" style="margin-top:12px">${runBtn("weekly",t("现在生成本周回顾"))}</div>`:"");
   const w=S.weeks[Math.min(S.weekIdx,S.weeks.length-1)];
   const picks=(w.picks||[]).map(id=>S.papers[id]).filter(Boolean).sort(byScore);
   const st=w.stats||{};
@@ -1264,25 +1713,25 @@ function viewWeek(){
     const items=(d.items||[]).filter(it=>it.mode!=="note"&&!(it.mode==="scan"&&i<5));
     return items.map((it,j)=>{
       const ids=(it.paperIds||[]).filter(id=>S.papers[id]);
-      const kind = it.mode==="deep" && it.task ? it.task : (MODES[it.mode]?.name||it.mode);
+      const kind = it.mode==="deep" && it.task ? it.task : modeName(it.mode);
       return `<tr class="${i>=5?"weekend":""}">
         ${j===0?`<td class="d" rowspan="${items.length}">${esc(wd||"")}<span>${esc(md||"")}</span></td>`:""}
         <td class="k ${it.mode==="deep"?"deep":""}">${esc(kind)}</td>
         <td class="p"><span class="kk">${esc(kind)}</span>${ids.length?ids.map(id=>`<button class="hit" data-open="${esc(id)}"><span class="ul">${esc(S.papers[id].title)}</span></button>`).join(""):`<span class="mute">${esc(it.task||"")}</span>`}</td>
-        <td class="m">${+it.minutes} 分钟</td></tr>`;
+        <td class="m">${t("{n} 分钟",{n:+it.minutes})}</td></tr>`;
     });
   }).join("");
   return `<header class="secfront">
-      <p class="pager-s wide"><button data-week="1" ${older?"":"disabled"} aria-label="上一周">‹</button><span>周报　${esc(w.range||w.week)}</span><button data-week="-1" ${newer?"":"disabled"} aria-label="下一周">›</button></p>
-      <h1 class="sec-title wk">${esc(w.headline||"本周回顾")}</h1>
+      <p class="pager-s wide"><button data-week="1" ${older?"":"disabled"} aria-label="${t("上一周")}">‹</button><span>${t("周报")}　${esc(w.range||w.week)}</span><button data-week="-1" ${newer?"":"disabled"} aria-label="${t("下一周")}">›</button></p>
+      <h1 class="sec-title wk">${esc(w.headline||t("本周回顾"))}</h1>
       ${w.summary?`<p class="sec-dek">${esc(w.summary)}</p>`:""}
-      <p class="mline">本周推荐 ${st.recommended??0} 篇<i aria-hidden="true">·</i>你读完 ${st.done??0} 篇</p>
+      <p class="mline">${t("本周推荐 {n} 篇",{n:st.recommended??0})}<i aria-hidden="true">·</i>${t("你读完 {n} 篇",{n:st.done??0})}</p>
     </header>
-    ${w.trends?.length?`<section class="sect"><div class="sect-h"><h2>本周主题</h2></div><div class="row3 themes2">${w.trends.map(t=>`<article><h3 class="ht">${esc(t.title)}</h3><p class="psum">${esc(t.body)}</p><ul class="refs2">${(t.paperIds||[]).filter(id=>S.papers[id]).map(id=>`<li><button class="hit" data-open="${esc(id)}"><span class="ul">${esc(S.papers[id].title)}</span></button></li>`).join("")}</ul></article>`).join("")}</div></section>`:""}
-    ${rows?`<section class="sect"><div class="sect-h"><h2>下周怎么读</h2><span class="cnt">${esc(venueText(w.nextWeek.range||"").replace(" 每天","，每天"))}</span></div>
-      <table class="plan"><thead><tr><th>日期</th><th class="k">安排</th><th>论文</th><th style="text-align:right">时间</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="mline" style="margin-top:10px">工作日每天另外留 10 分钟扫当天的新推荐、10 分钟写笔记</p></section>`:""}
-    ${picks.length?`<section class="sect"><div class="sect-h"><h2>本周最值得读的</h2><span class="cnt">按综合分排序</span></div>
+    ${w.trends?.length?`<section class="sect"><div class="sect-h"><h2>${t("本周主题")}</h2></div><div class="row3 themes2">${w.trends.map(t=>`<article><h3 class="ht">${esc(t.title)}</h3><p class="psum">${esc(t.body)}</p><ul class="refs2">${(t.paperIds||[]).filter(id=>S.papers[id]).map(id=>`<li><button class="hit" data-open="${esc(id)}"><span class="ul">${esc(S.papers[id].title)}</span></button></li>`).join("")}</ul></article>`).join("")}</div></section>`:""}
+    ${rows?`<section class="sect"><div class="sect-h"><h2>${t("下周怎么读")}</h2><span class="cnt">${esc(venueText(w.nextWeek.range||"").replace(" 每天","，每天"))}</span></div>
+      <table class="plan"><thead><tr><th>${t("日期")}</th><th class="k">${t("安排")}</th><th>${t("论文")}</th><th style="text-align:right">${t("时间")}</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="mline" style="margin-top:10px">${t("工作日每天另外留 10 分钟扫当天的新推荐、10 分钟写笔记")}</p></section>`:""}
+    ${picks.length?`<section class="sect"><div class="sect-h"><h2>${t("本周最值得读的")}</h2><span class="cnt">${t("按综合分排序")}</span></div>
       <ol class="ranked">${picks.map(p=>`<li><span class="t">${titleBtn(p)}${stamps(p.id)}</span>${scoreEl(p)}<p class="why">${esc(p.why||"")}</p></li>`).join("")}</ol></section>`:""}`;
 }
 
@@ -1292,11 +1741,11 @@ function viewLib(){
   if(L.list===null && !L.loading) loadLib();
   const list=(L.list||[]).map(id=>S.papers[id]).filter(Boolean);
   S.order=list.map(p=>p.id);
-  return `<div class="search"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6"><circle cx="8.5" cy="8.5" r="6"/><path d="M13 13l5 5"/></svg><input type="search" id="lib-q" placeholder="搜标题、作者、要点或 arXiv 编号" value="${esc(L.q)}" aria-label="搜索论文"></div>
-    <div class="filters">${[["","全部"],...STATUS].map(([k,l])=>`<button data-status="${k}" aria-pressed="${L.status===k}">${l}</button>`).join("")}<span class="faint" style="margin-left:auto">${L.list===null?"载入中…":`${L.total} 篇${L.total>list.length?`，先显示 ${list.length} 篇`:""}`}</span></div>
+  return `<div class="search"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6"><circle cx="8.5" cy="8.5" r="6"/><path d="M13 13l5 5"/></svg><input type="search" id="lib-q" placeholder="${t("搜标题、作者、要点或 arXiv 编号")}" value="${esc(L.q)}" aria-label="${t("搜索论文")}"></div>
+    <div class="filters">${[["","全部"],...STATUS].map(([k,l])=>`<button data-status="${k}" aria-pressed="${L.status===k}">${t(l)}</button>`).join("")}<span class="faint" style="margin-left:auto">${L.list===null?t("载入中…"):t("{n} 篇",{n:L.total})+(L.total>list.length?t("，先显示 {n} 篇",{n:list.length}):"")}</span></div>
     ${list.length?`<ol class="archive">${libRows(list)}</ol>`
-      :(L.list?`<div style="margin-top:24px">${emptyBox(L.q||L.status?"没有符合条件的论文":"论文库是空的", L.q||L.status?"换个关键词或状态试试。":"每日推荐过的论文都会进入这里。")}</div>`:"")}
-    ${L.total>list.length?`<div class="actions" style="margin-top:18px"><button class="btn" id="lib-more" ${L.loading?"disabled":""}>再看 50 篇</button></div>`:""}`;
+      :(L.list?`<div style="margin-top:24px">${emptyBox(L.q||L.status?t("没有符合条件的论文"):t("论文库是空的"), L.q||L.status?t("换个关键词或状态试试。"):t("每日推荐过的论文都会进入这里。"))}</div>`:"")}
+    ${L.total>list.length?`<div class="actions" style="margin-top:18px"><button class="btn" id="lib-more" ${L.loading?"disabled":""}>${t("再看 50 篇")}</button></div>`:""}`;
 }
 // 按推荐日期分组，日期只在组头出现一次
 function libRows(list){
@@ -1304,7 +1753,7 @@ function libRows(list){
   for(const p of list){
     const d=(p.addedOn||p.date||"").slice(0,10);
     if(d!==last){ last=d; const n=list.filter(x=>(x.addedOn||x.date||"").slice(0,10)===d).length;
-      out.push(`<li class="dh">${esc(d?longDate(d).replace("　"," "):"更早")}<span>${n} 篇</span></li>`); }
+      out.push(`<li class="dh">${esc(d?longDate(d).replace("　"," "):t("更早"))}<span>${t("{n} 篇",{n})}</span></li>`); }
     out.push(`<li class="row${isRead(p.id)?" read":""}">${checkBtn(p.id)}<span class="t">${titleBtn(p)}${stamps(p.id)}</span>${scoreEl(p)}<p class="why">${esc(p.why||p.summary||"")}</p></li>`);
   }
   return out.join("");
@@ -1326,59 +1775,62 @@ async function loadLib(append){
 /* ---------- 笔记 ---------- */
 function viewNotes(){
   const ids=Object.keys(S.notes).filter(id=>S.papers[id]&&((S.notes[id].note||"").trim()||(S.notes[id].flags||[]).length||["reading","done"].includes(S.notes[id].status)));
-  if(!ids.length) return emptyBox("还没有笔记","打开一篇论文，用自己的话写 3 到 5 句：问题、核心 idea、关键结果、你的看法。笔记自动保存，会出现在这里。");
+  if(!ids.length) return emptyBox(t("还没有笔记"),t("打开一篇论文，用自己的话写 3 到 5 句：问题、核心 idea、关键结果、你的看法。笔记自动保存，会出现在这里。"));
   ids.sort((a,b)=>(S.notes[b].updatedAt||"").localeCompare(S.notes[a].updatedAt||""));
   S.order=ids;
   return `<div class="letters">${ids.map(id=>{const p=S.papers[id],n=S.notes[id];
-    const m=[fmtDate(n.updatedAt||""), n.status==="done"?"已读":n.status==="reading"?"在读":"", (n.flags||[]).join("、"), S.zotero[id]?"已入 Zotero":""].filter(Boolean);
-    return `<button class="letter" data-open="${esc(id)}" data-focus="note"><p class="kicker">${esc(m.join("，"))}</p><span class="t">${esc(p.title)}</span><span class="n ${n.note?"":"faint"}">${esc(n.note||"还没写内容")}</span></button>`;}).join("")}</div>`;
+    const m=[fmtDate(n.updatedAt||""), n.status==="done"?t("已读"):n.status==="reading"?t("在读"):"", (n.flags||[]).map(f=>t(f)).join(t("、")), S.zotero[id]?t("已入 Zotero"):""].filter(Boolean);
+    return `<button class="letter" data-open="${esc(id)}" data-focus="note"><p class="kicker">${esc(m.join(t("，")))}</p><span class="t">${esc(p.title)}</span><span class="n ${n.note?"":"faint"}">${esc(n.note||t("还没写内容"))}</span></button>`;}).join("")}</div>`;
 }
 
 /* ---------- 设置 ---------- */
 const presetOf = id => (S.site?.presets||[]).find(p=>p.id===(id||"robotics"));
-const formula = w => `综合分 = 相关 × ${(+w.relevance).toFixed(2)} + 影响 × ${(+w.impact).toFixed(2)} + 热度 × ${(+w.buzz).toFixed(2)}，再按总权重归一`;
+const formula = w => t("综合分 = 相关 × {r} + 影响 × {i} + 热度 × {b}，再按总权重归一",{r:(+w.relevance).toFixed(2), i:(+w.impact).toFixed(2), b:(+w.buzz).toFixed(2)});
 function viewCfg(){
   const s=S.settings||{}, w=weights(), f=S.features;
   const sl=(k,l)=>`<div class="slider"><label for="w-${k}">${l}</label><input type="range" min="0" max="1" step="0.05" id="w-${k}" value="${w[k]}"><output id="wv-${k}">${(+w[k]).toFixed(2)}</output></div>`;
   const ck=(ok,yes,no)=>`<li class="${ok?"ok":""}"><span class="${ok?"":"mute"}">${ok?yes:no}</span></li>`;
   return `<div class="form">
-    <section class="section"><h2>方向</h2>
+    <section class="section"><h2>${t("语言")}</h2>
+      <label for="cfg-lang">${t("界面和生成内容的语言（摘要、解读、简报、周报、问 AI）")}<select id="cfg-lang"><option value="zh" ${(s.lang||"zh")==="zh"?"selected":""}>中文</option><option value="en" ${s.lang==="en"?"selected":""}>English</option></select></label>
+      <p class="small faint">${t("界面马上切换；已经生成的内容不变，下一次生成起用新语言。")}</p></section>
+    <section class="section"><h2>${t("方向")}</h2>
       <div class="three">
-        <label for="cfg-preset">方向预设<select id="cfg-preset">${(S.site?.presets||[]).map(p=>`<option value="${esc(p.id)}" ${p.id===(s.preset||"robotics")?"selected":""}>${esc(p.label)}</option>`).join("")}</select></label>
-        <label for="cfg-site">报名<input type="text" id="cfg-site" value="${esc(s.siteName||"")}" placeholder="${esc(presetOf(s.preset)?.siteName||"")}"></label>
-        <label for="cfg-field">领域名<input type="text" id="cfg-field" value="${esc(s.field||"")}" placeholder="${esc(presetOf(s.preset)?.field||"")}"></label>
+        <label for="cfg-preset">${t("方向预设")}<select id="cfg-preset">${(S.site?.presets||[]).map(p=>`<option value="${esc(p.id)}" ${p.id===(s.preset||"robotics")?"selected":""}>${esc(p.label)}</option>`).join("")}</select></label>
+        <label for="cfg-site">${t("报名")}<input type="text" id="cfg-site" value="${esc(s.siteName||"")}" placeholder="${esc(presetOf(s.preset)?.siteName||"")}"></label>
+        <label for="cfg-field">${t("领域名")}<input type="text" id="cfg-field" value="${esc(s.field||"")}" placeholder="${esc(presetOf(s.preset)?.field||"")}"></label>
       </div>
-      <p class="small faint">方向预设决定大模型的写作人设、论文的方向标签和业界新闻来源。报名和领域名留空就用预设的；领域名会写进大模型的人设（“你是一位做……的资深研究者”）。</p>
-      <label for="cfg-city">天气城市（浏览器不给定位、也没在报头上选地点时用；留空就不显示）<input type="text" id="cfg-city" value="${esc(s.weatherCity||"")}" placeholder="例如：杭州"></label></section>
-    <section class="section"><h2>读什么</h2>
-      <label for="cfg-int">研究兴趣（大模型精排和写推荐理由时会看这段话）<textarea id="cfg-int" rows="3" placeholder="例如：人形机器人全身控制、运动模仿、sim2real；不看纯视觉检测（写得越具体，推荐越准）">${esc(s.interests||"")}</textarea></label>
-      <label for="cfg-cats">arXiv 分类（逗号分隔）<input type="text" id="cfg-cats" value="${esc((s.categories||[]).join(", "))}" placeholder="cs.RO, cs.LG"></label>
+      <p class="small faint">${t("方向预设决定大模型的写作人设、论文的方向标签和业界新闻来源。报名和领域名留空就用预设的；领域名会写进大模型的人设（“你是一位做……的资深研究者”）。")}</p>
+      <label for="cfg-city">${t("天气城市（浏览器不给定位、也没在报头上选地点时用；留空就不显示）")}<input type="text" id="cfg-city" value="${esc(s.weatherCity||"")}" placeholder="${t("例如：杭州")}"></label></section>
+    <section class="section"><h2>${t("读什么")}</h2>
+      <label for="cfg-int">${t("研究兴趣（大模型精排和写推荐理由时会看这段话）")}<textarea id="cfg-int" rows="3" placeholder="${t("例如：人形机器人全身控制、运动模仿、sim2real；不看纯视觉检测（写得越具体，推荐越准）")}">${esc(s.interests||"")}</textarea></label>
+      <label for="cfg-cats">${t("arXiv 分类（逗号分隔）")}<input type="text" id="cfg-cats" value="${esc((s.categories||[]).join(", "))}" placeholder="cs.RO, cs.LG"></label>
       <div class="three">
-        <label for="cfg-min">每天读多久（分钟）<input type="number" id="cfg-min" min="15" max="240" step="5" value="${s.dailyMinutes||60}"></label>
-        <label for="cfg-top">每天推荐几篇<input type="number" id="cfg-top" min="3" max="30" value="${s.top||12}"></label>
-        <label for="cfg-tag">Zotero 标签<input type="text" id="cfg-tag" value="${esc(s.tag||"Robot Times")}"></label>
+        <label for="cfg-min">${t("每天读多久（分钟）")}<input type="number" id="cfg-min" min="15" max="240" step="5" value="${s.dailyMinutes||60}"></label>
+        <label for="cfg-top">${t("每天推荐几篇")}<input type="number" id="cfg-top" min="3" max="30" value="${s.top||12}"></label>
+        <label for="cfg-tag">${t("Zotero 标签")}<input type="text" id="cfg-tag" value="${esc(s.tag||"Robot Times")}"></label>
       </div>
-      <label for="cfg-zcol">加入 Zotero 时放进的文件夹（填 Zotero 里已有的文件夹名，留空就放在“我的文库”）<input type="text" id="cfg-zcol" value="${esc(s.zoteroCollection||"")}" placeholder="例如：Inbox"></label>
-      <label for="cfg-feeds">业界页额外订阅（RSS 地址，一行一个。Substack 的地址是 https://名字.substack.com/feed）<textarea id="cfg-feeds" rows="4" placeholder="https://itcanthink.substack.com/feed">${esc((s.newsFeeds||[]).join("\n"))}</textarea></label></section>
-    <section class="section"><h2>怎么排</h2>
-      <p class="mute">每篇论文有三项分数。<b>相关</b>看和你的文献库、研究兴趣、以往反馈像不像，再加上大模型的判断；<b>影响</b>看有没有写明被顶会顶刊接收；<b>热度</b>看 Hugging Face 上的点赞，没上榜算中性。拖动时，今日和论文库里的排序会跟着变。</p>
-      ${sl("relevance","相关")}${sl("impact","影响")}${sl("buzz","热度")}
+      <label for="cfg-zcol">${t("加入 Zotero 时放进的文件夹（填 Zotero 里已有的文件夹名，留空就放在“我的文库”）")}<input type="text" id="cfg-zcol" value="${esc(s.zoteroCollection||"")}" placeholder="${t("例如：Inbox")}"></label>
+      <label for="cfg-feeds">${t("业界页额外订阅（RSS 地址，一行一个。Substack 的地址是 https://名字.substack.com/feed）")}<textarea id="cfg-feeds" rows="4" placeholder="https://itcanthink.substack.com/feed">${esc((s.newsFeeds||[]).join("\n"))}</textarea></label></section>
+    <section class="section"><h2>${t("怎么排")}</h2>
+      <p class="mute">${t("每篇论文有三项分数。<b>相关</b>看和你的文献库、研究兴趣、以往反馈像不像，再加上大模型的判断；<b>影响</b>看有没有写明被顶会顶刊接收；<b>热度</b>看 Hugging Face 上的点赞，没上榜算中性。拖动时，今日和论文库里的排序会跟着变。")}</p>
+      ${sl("relevance",t("相关"))}${sl("impact",t("影响"))}${sl("buzz",t("热度"))}
       <p class="small faint" id="formula">${formula(w)}</p>
-      <div class="slider" style="margin-top:6px"><label for="cfg-div">多样性</label><input type="range" min="0" max="1" step="0.1" id="cfg-div" value="${s.diversity??0.4}"><output id="cfg-div-v">${(+(s.diversity??0.4)).toFixed(1)}</output></div>
-      <p class="small faint">同一个方向的论文太多时，往右拖会让位给其他方向（0 是只按综合分排）。下一次生成推荐时生效。</p>
-      <div class="actions"><button class="btn pri" id="cfg-save">保存设置</button>${runBtn("daily","按新设置重新生成今天的推荐")}</div></section>
-    <section class="section"><h2>连接</h2>
+      <div class="slider" style="margin-top:6px"><label for="cfg-div">${t("多样性")}</label><input type="range" min="0" max="1" step="0.1" id="cfg-div" value="${s.diversity??0.4}"><output id="cfg-div-v">${(+(s.diversity??0.4)).toFixed(1)}</output></div>
+      <p class="small faint">${t("同一个方向的论文太多时，往右拖会让位给其他方向（0 是只按综合分排）。下一次生成推荐时生效。")}</p>
+      <div class="actions"><button class="btn pri" id="cfg-save">${t("保存设置")}</button>${runBtn("daily",t("按新设置重新生成今天的推荐"))}</div></section>
+    <section class="section"><h2>${t("连接")}</h2>
       <ul class="status-list">
-        ${isLocal()?"":ck(true,`已登录：${esc(S.me)}`,"")}
+        ${isLocal()?"":ck(true,t("已登录：{who}",{who:esc(S.me)}),"")}
         ${isLocal() ? `
-        ${ck(f.zotero,"可以写入 Zotero（本机）","还不能写入 Zotero：点下面的按钮重新连接，在 Zotero 弹窗里点 Always Allow")}
-        ${ck(f.ask,"可以问 AI、写中文解读","还没配大模型（可选）：点下面的按钮填密钥")}
-        ${ck(true,"数据存在这台电脑上（~/.robot-times/robot-times.db）","")}
-        <li style="list-style:none"><div class="actions"><button class="btn link" data-act="export">导出备份（.sql，也能导进云端版）</button></div></li>
-        <li style="list-style:none"><div class="actions"><button class="btn" data-su="reopen">${f.zotero&&f.ask?"重新连接 Zotero、换大模型":"连接 Zotero、配大模型"}</button></div></li>` : `
-        ${ck(f.zotero,"可以写入 Zotero","还不能写入 Zotero：在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY")}
-        ${ck(f.ask,"可以问 AI","还不能问 AI：在 Cloudflare 给看板加上 DEEPSEEK_API_KEY")}
-        ${ck(f.run,"可以在这里手动生成推荐","“立即生成”没开（可选）：在 Cloudflare 给看板加上 GITHUB_TOKEN")}`}
+        ${ck(f.zotero,t("可以写入 Zotero（本机）"),t("还不能写入 Zotero：点下面的按钮重新连接，在 Zotero 弹窗里点 Always Allow"))}
+        ${ck(f.ask,t("可以问 AI、写中文解读"),t("还没配大模型（可选）：点下面的按钮填密钥"))}
+        ${ck(true,t("数据存在这台电脑上（~/.robot-times/robot-times.db）"),"")}
+        <li style="list-style:none"><div class="actions"><button class="btn link" data-act="export">${t("导出备份（.sql，也能导进云端版）")}</button></div></li>
+        <li style="list-style:none"><div class="actions"><button class="btn" data-su="reopen">${f.zotero&&f.ask?t("重新连接 Zotero、换大模型"):t("连接 Zotero、配大模型")}</button></div></li>` : `
+        ${ck(f.zotero,t("可以写入 Zotero"),t("还不能写入 Zotero：在 Cloudflare 给看板加上 ZOTERO_USER_ID 和 ZOTERO_API_KEY"))}
+        ${ck(f.ask,t("可以问 AI"),t("还不能问 AI：在 Cloudflare 给看板加上 DEEPSEEK_API_KEY"))}
+        ${ck(f.run,t("可以在这里手动生成推荐"),t("“立即生成”没开（可选）：在 Cloudflare 给看板加上 GITHUB_TOKEN"))}`}
       </ul></section>
     ${versionSection()}
     ${doctorSection()}
@@ -1396,7 +1848,7 @@ async function loadSetup(){
   if(SU.st?.llm?.configured && !SU.llmRedo) SU.llmOk=true;
 }
 function viewSetup(){
-  if(!SU.st){ loadSetup().then(render); return `<p class="mute">正在检测 Zotero……</p>`; }
+  if(!SU.st){ loadSetup().then(render); return `<p class="mute">${t("正在检测 Zotero……")}</p>`; }
   const st=SU.st, z=st.zotero, s=st.settings||{}, d=SU.draft;
   const zOk = z.running && z.versionOk!==false && z.localApi;
   const authOk = z.authorized;
@@ -1405,55 +1857,57 @@ function viewSetup(){
   const li=(ok,t)=>`<li class="${ok?"ok":""}">${t}</li>`;
   const err=k=>SU.err[k]?`<p class="err">${esc(SU.err[k])}</p>`:"";
   const mac=/Mac/.test(navigator.platform||""), win=/Win/.test(navigator.platform||"");
-  const settingsPath = mac ? "Zotero → 设置" : "编辑 → 设置";
+  const settingsPath = mac ? t("Zotero → 设置") : t("编辑 → 设置");
+  const dl = `<a href="https://www.zotero.org/download/" target="_blank" rel="noopener">zotero.org/download</a>`;
   let zHelp="";
-  if(!z.running) zHelp=`打开 Zotero。还没装的话，先到 <a href="https://www.zotero.org/download/" target="_blank" rel="noopener">zotero.org/download</a> 下载安装。打开后这里会自动往下走。`;
-  else if(z.versionOk===false) zHelp=`你的 Zotero 是 ${esc(z.version)}，需要 10 或更新的版本：到 <a href="https://www.zotero.org/download/" target="_blank" rel="noopener">zotero.org/download</a> 下载新版本安装（文献库不会丢）。`;
-  else if(!z.localApi) zHelp=`在 Zotero 里打开 <b>${settingsPath} → 高级</b>，勾选<b>“允许此计算机上的其他应用程序与 Zotero 通信”</b>。勾上后这里会自动往下走。`
-    + (z.canEnable?`<br>找不到的话，也可以让我帮你打开：先<b>完全退出 Zotero</b>，点下面的按钮，再重新打开 Zotero。<div class="actions" style="margin-top:8px"><button class="btn" data-su="enable" ${SU.busy?"disabled":""}>${SU.busy==="enable"?"正在打开…":"帮我打开这个开关"}</button></div>`:"");
+  if(!z.running) zHelp=t("打开 Zotero。还没装的话，先到 {dl} 下载安装。打开后这里会自动往下走。",{dl});
+  else if(z.versionOk===false) zHelp=t("你的 Zotero 是 {v}，需要 10 或更新的版本：到 {dl} 下载新版本安装（文献库不会丢）。",{v:esc(z.version),dl});
+  else if(!z.localApi) zHelp=t("在 Zotero 里打开 <b>{path} → 高级</b>，勾选<b>“允许此计算机上的其他应用程序与 Zotero 通信”</b>。勾上后这里会自动往下走。",{path:settingsPath})
+    + (z.canEnable?`<br>${t("找不到的话，也可以让我帮你打开：先<b>完全退出 Zotero</b>，点下面的按钮，再重新打开 Zotero。")}<div class="actions" style="margin-top:8px"><button class="btn" data-su="enable" ${SU.busy?"disabled":""}>${SU.busy==="enable"?t("正在打开…"):t("帮我打开这个开关")}</button></div>`:"");
   const folders = SU.folders||[];
   const cur = d.zoteroCollection ?? s.zoteroCollection ?? "";
   return `<div class="setup">
-    ${S.setup?.reopened?`<p><button class="btn link" data-su="cancel">← 返回设置</button></p>`:""}
-    <h1>${S.setup?.reopened?"重新设置连接":`欢迎使用 ${esc(S.site?.name||"The Robot Times")}`}</h1>
-    <p class="lede">${S.setup?.reopened?"改好哪一步都行，最后点“保存”。":"四步设置好，之后每天早上打开这里就是你的论文早报。数据都留在这台电脑上。"}</p>
+    ${S.setup?.reopened?`<p><button class="btn link" data-su="cancel">${t("← 返回设置")}</button></p>`:""}
+    <div class="seg" role="group" aria-label="Language / 语言" style="float:right"><button data-su="lang-zh" aria-pressed="${LANG==="zh"}">中文</button><button data-su="lang-en" aria-pressed="${LANG==="en"}">English</button></div>
+    <h1>${S.setup?.reopened?t("重新设置连接"):t("欢迎使用 {name}",{name:esc(S.site?.name||"The Robot Times")})}</h1>
+    <p class="lede">${S.setup?.reopened?t("改好哪一步都行，最后点“保存”。"):t("四步设置好，之后每天早上打开这里就是你的论文早报。数据都留在这台电脑上。")}</p>
 
     <section class="step ${zOk?"ok":""}"><span class="n">${zOk?"✓":"1"}</span><div>
-      <h2>连上 Zotero</h2>
-      <ul class="checks">${li(z.running,"Zotero 已经打开")}${li(z.running&&z.versionOk!==false, `版本 10 或更新${z.version?`（现在是 ${esc(z.version)}）`:""}`)}${li(z.localApi,"允许本机的程序访问")}</ul>
+      <h2>${t("连上 Zotero")}</h2>
+      <ul class="checks">${li(z.running,t("Zotero 已经打开"))}${li(z.running&&z.versionOk!==false, t("版本 10 或更新")+(z.version?t("（现在是 {v}）",{v:esc(z.version)}):""))}${li(z.localApi,t("允许本机的程序访问"))}</ul>
       ${zOk?"":`<div class="help">${zHelp}</div>`}${err("enable")}
-      ${zOk?"":`<button class="btn link" data-su="recheck">重新检测</button>`}
+      ${zOk?"":`<button class="btn link" data-su="recheck">${t("重新检测")}</button>`}
     </div></section>
 
     <section class="step ${authOk?"ok":""} ${zOk?"":"off"}"><span class="n">${authOk?"✓":"2"}</span><div>
-      <h2>允许它把论文加进 Zotero</h2>
-      ${authOk?`<p class="mute">已经允许了。${SU.busy==="auth"?"等你在 Zotero 里点 Always Allow…":`加入 Zotero 时每次都弹窗，或者换了电脑上的 Zotero：<button class="btn link" data-su="auth" ${zOk&&!SU.busy?"":"disabled"}>重新连接</button>`}</p>${err("auth")}`:`<p>点下面的按钮后，切到 Zotero，在弹出的窗口里点 <b>Always Allow</b>（总是允许）。</p>
-      <div class="actions"><button class="btn pri" data-su="auth" ${zOk&&!SU.busy?"":"disabled"}>${SU.busy==="auth"?"等你在 Zotero 里点 Always Allow…":"连接 Zotero"}</button></div>${err("auth")}`}
+      <h2>${t("允许它把论文加进 Zotero")}</h2>
+      ${authOk?`<p class="mute">${t("已经允许了。")}${SU.busy==="auth"?t("等你在 Zotero 里点 Always Allow…"):`${t("加入 Zotero 时每次都弹窗，或者换了电脑上的 Zotero：")}<button class="btn link" data-su="auth" ${zOk&&!SU.busy?"":"disabled"}>${t("重新连接")}</button>`}</p>${err("auth")}`:`<p>${t("点下面的按钮后，切到 Zotero，在弹出的窗口里点 <b>Always Allow</b>（总是允许）。")}</p>
+      <div class="actions"><button class="btn pri" data-su="auth" ${zOk&&!SU.busy?"":"disabled"}>${SU.busy==="auth"?t("等你在 Zotero 里点 Always Allow…"):t("连接 Zotero")}</button></div>${err("auth")}`}
     </div></section>
 
     <section class="step ${dirOk&&authOk?"ok":""} ${authOk?"":"off"}"><span class="n">${dirOk&&authOk?"✓":"3"}</span><div>
-      <h2>你在研究什么</h2>
-      <label for="su-int">研究兴趣（一两句话，越具体推荐越准）</label>
-      <textarea id="su-int" rows="3" placeholder="例如：足式机器人运动控制、人形机器人全身控制、sim2real；不看纯视觉检测" ${authOk?"":"disabled"}>${esc(d.interests ?? s.interests ?? "")}</textarea>
-      <label for="su-cats">arXiv 分类（默认机器人 cs.RO；其他方向例如 cs.LG、cs.CV,cs.AI）</label>
+      <h2>${t("你在研究什么")}</h2>
+      <label for="su-int">${t("研究兴趣（一两句话，越具体推荐越准）")}</label>
+      <textarea id="su-int" rows="3" placeholder="${t("例如：足式机器人运动控制、人形机器人全身控制、sim2real；不看纯视觉检测")}" ${authOk?"":"disabled"}>${esc(d.interests ?? s.interests ?? "")}</textarea>
+      <label for="su-cats">${t("arXiv 分类（默认机器人 cs.RO；其他方向例如 cs.LG、cs.CV,cs.AI）")}</label>
       <input type="text" id="su-cats" value="${esc(d.categories ?? (s.categories||[]).join(", "))}" ${authOk?"":"disabled"}>
-      <label for="su-folder">“加入 Zotero”时放进哪个文件夹</label>
-      <select id="su-folder" ${authOk?"":"disabled"}><option value="">我的文库（不放进文件夹）</option>${folders.map(f=>`<option ${f===cur?"selected":""}>${esc(f)}</option>`).join("")}</select>
+      <label for="su-folder">${t("“加入 Zotero”时放进哪个文件夹")}</label>
+      <select id="su-folder" ${authOk?"":"disabled"}><option value="">${t("我的文库（不放进文件夹）")}</option>${folders.map(f=>`<option ${f===cur?"selected":""}>${esc(f)}</option>`).join("")}</select>
     </div></section>
 
     <section class="step ${SU.llmOk?"ok":""} ${authOk?"":"off"}"><span class="n">${SU.llmOk?"✓":"4"}</span><div>
-      <h2>大模型（可以跳过，但强烈建议）</h2>
-      ${SU.llmOk?`<p class="mute">已经配好了，可以写中文摘要、全文解读和“问 AI”。<button class="btn link" data-su="llmredo">换一个密钥或模型</button></p>`:`
-      <p>有了它才有中文标题和摘要、全文解读、更准的排序和“问 AI”。默认用 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">DeepSeek</a>（注册后在 API keys 里创建密钥，充几块钱能用很久）。密钥只存在这台电脑上。</p>
-      <label for="su-key">密钥</label><input type="text" id="su-key" placeholder="sk-…" autocomplete="off" value="${esc(d.key||"")}" ${authOk?"":"disabled"}>
-      <details ${d.base||d.model?"open":""}><summary class="small">用其他 OpenAI 兼容的接口（包括本地 Ollama）</summary>
-        <label for="su-base">接口地址</label><input type="text" id="su-base" placeholder="https://api.deepseek.com" value="${esc(d.base||"")}">
-        <label for="su-model">模型名</label><input type="text" id="su-model" placeholder="deepseek-flash" value="${esc(d.model||"")}"></details>
-      <div class="actions"><button class="btn" data-su="llm" ${authOk&&!SU.busy?"":"disabled"}>${SU.busy==="llm"?"正在测试…":"测试并保存"}</button>${SU.llmSkip?`<span class="small faint">先跳过了，以后在设置页也能配</span>`:`<button class="btn link" data-su="skip" ${authOk?"":"disabled"}>先跳过</button>`}</div>${err("llm")}`}
+      <h2>${t("大模型（可以跳过，但强烈建议）")}</h2>
+      ${SU.llmOk?`<p class="mute">${t("已经配好了，可以写中文摘要、全文解读和“问 AI”。")}<button class="btn link" data-su="llmredo">${t("换一个密钥或模型")}</button></p>`:`
+      <p>${t("有了它才有中文标题和摘要、全文解读、更准的排序和“问 AI”。默认用 {ds}（注册后在 API keys 里创建密钥，充几块钱能用很久）。密钥只存在这台电脑上。",{ds:`<a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">DeepSeek</a>`})}</p>
+      <label for="su-key">${t("密钥")}</label><input type="text" id="su-key" placeholder="sk-…" autocomplete="off" value="${esc(d.key||"")}" ${authOk?"":"disabled"}>
+      <details ${d.base||d.model?"open":""}><summary class="small">${t("用其他 OpenAI 兼容的接口（包括本地 Ollama）")}</summary>
+        <label for="su-base">${t("接口地址")}</label><input type="text" id="su-base" placeholder="https://api.deepseek.com" value="${esc(d.base||"")}">
+        <label for="su-model">${t("模型名")}</label><input type="text" id="su-model" placeholder="deepseek-flash" value="${esc(d.model||"")}"></details>
+      <div class="actions"><button class="btn" data-su="llm" ${authOk&&!SU.busy?"":"disabled"}>${SU.busy==="llm"?t("正在测试…"):t("测试并保存")}</button>${SU.llmSkip?`<span class="small faint">${t("先跳过了，以后在设置页也能配")}</span>`:`<button class="btn link" data-su="skip" ${authOk?"":"disabled"}>${t("先跳过")}</button>`}</div>${err("llm")}`}
     </div></section>
 
     <div class="actions" style="justify-content:flex-end;border-top:1px solid var(--rule);padding-top:18px">
-      ${err("finish")}<button class="btn pri" data-su="finish" ${zOk&&authOk&&llmDone&&!SU.busy?"":"disabled"}>${S.setup?.reopened?"保存":"开始使用"}</button></div>
+      ${err("finish")}<button class="btn pri" data-su="finish" ${zOk&&authOk&&llmDone&&!SU.busy?"":"disabled"}>${S.setup?.reopened?t("保存"):t("开始使用")}</button></div>
   </div>`;
 }
 function suDraft(){
@@ -1474,34 +1928,37 @@ async function suAction(what){
     window.scrollTo(0,0); return render();
   }
   if(what==="cancel"){ clearInterval(SU.timer); SU.timer=null; S.setup={done:true}; return render(); }
+  if(what==="lang-zh"||what==="lang-en"){ setUiLang(what.slice(5)); return render(); }  // 最后点“开始使用”时存进设置
   if(what==="recheck") return run("recheck", async()=>{});
-  if(what==="enable") return run("enable", async()=>{ await api("/api/setup/enable-api",{method:"POST"}); toast("已经打开了，现在重新打开 Zotero"); });
-  if(what==="auth") return run("auth", async()=>{ await api("/api/setup/authorize",{method:"POST"}); SU.folders=null; S.features.zotero=true; toast("连上了"); });
+  if(what==="enable") return run("enable", async()=>{ await api("/api/setup/enable-api",{method:"POST"}); toast(t("已经打开了，现在重新打开 Zotero")); });
+  if(what==="auth") return run("auth", async()=>{ await api("/api/setup/authorize",{method:"POST"}); SU.folders=null; S.features.zotero=true; toast(t("连上了")); });
   if(what==="skip"){ SU.llmSkip=true; return render(); }
   if(what==="llmredo"){ SU.llmOk=false; SU.llmSkip=false; SU.llmRedo=true; return render(); }
-  if(what==="llm") return run("llm", async()=>{ await api("/api/setup/llm",{method:"PUT", body:JSON.stringify({key:d.key, base:d.base, model:d.model})}); SU.llmOk=true; SU.llmRedo=false; S.features.ask=true; toast("大模型能用了"); });
+  if(what==="llm") return run("llm", async()=>{ await api("/api/setup/llm",{method:"PUT", body:JSON.stringify({key:d.key, base:d.base, model:d.model})}); SU.llmOk=true; SU.llmRedo=false; S.features.ask=true; toast(t("大模型能用了")); });
   if(what==="finish") return run("finish", async()=>{
     const cats=(d.categories||"").split(/[，,、\s]+/).map(x=>x.trim()).filter(Boolean);
-    await api("/api/setup/finish",{method:"POST", body:JSON.stringify({interests:d.interests ?? SU.st.settings.interests, zoteroCollection:d.zoteroCollection ?? SU.st.settings.zoteroCollection ?? "", ...(cats.length?{categories:cats}:{})})});
+    await api("/api/setup/finish",{method:"POST", body:JSON.stringify({interests:d.interests ?? SU.st.settings.interests, zoteroCollection:d.zoteroCollection ?? SU.st.settings.zoteroCollection ?? "", lang:LANG, ...(cats.length?{categories:cats}:{})})});
     clearInterval(SU.timer); SU.timer=null; S.setup=null;
-    await loadAll(); S.tab="today"; showJob(); watchJob(); toast("开始生成今天的推荐了，第一次要几分钟");
+    await loadAll(); S.tab="today"; showJob(); watchJob(); toast(t("开始生成今天的推荐了，第一次要几分钟"));
   });
 }
 
 /* ---------- 体检、日志、重启：出了问题在页面上就能查、能修 ---------- */
-const fmtTime = iso => { if(!iso) return ""; const d=new Date(iso); return isNaN(d)?String(iso):`${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+const fmtTime = iso => { if(!iso) return ""; const d=new Date(iso); if(isNaN(d)) return String(iso);
+  const hm=`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  return isEn() ? `${MONTHS_EN[d.getMonth()]} ${d.getDate()} ${hm}` : `${d.getMonth()+1}月${d.getDate()}日 ${hm}`; };
 const DOC = {busy:false, res:null, err:""};
 function doctorSection(){
-  const r=DOC.res, LB={daily:"推荐", news:"业界简报", weekly:"周报"};
+  const r=DOC.res, LB={daily:t("推荐"), news:t("业界简报"), weekly:t("周报")};
   const list = r ? `<ul class="status-list" style="margin-top:14px">${r.checks.map(c=>`<li class="${c.ok?"ok":c.ok===false?"bad":""}"><b>${esc(c.label)}</b>${c.detail?`　<span class="faint">${esc(c.detail)}</span>`:""}
       ${c.hint?`<div class="sub">${esc(c.hint)}</div>`:""}${(c.actions||[]).filter(actOk).length?`<div class="acts">${actBtns(c.actions,"btn link")}</div>`:""}</li>`).join("")}</ul>
-    <p class="small ${r.ok?"":"err"}" style="margin-top:10px">${r.ok?"都正常。":"标红的是有问题的地方，按旁边的说明处理；处理不了就复制诊断信息去报告问题。"}</p>
-    ${(r.history||[]).length?`<details><summary class="small">最近 ${r.history.length} 次生成</summary><ul class="hist">${r.history.map(h=>`<li>${esc(fmtTime(h.at))}　${esc(LB[h.kind]||h.kind||"")}　${h.ok?"成功":"<b>失败</b>"}　${esc(h.message||"")}</li>`).join("")}</ul></details>`:""}` : "";
-  return `<section class="section" id="doctor"><h2>体检和排查</h2>
-    <p class="mute">哪里不对劲，先点“开始体检”：一项项检查，有问题的地方会告诉你怎么办。</p>
-    <div class="actions"><button class="btn pri" data-act="doctor-run" ${DOC.busy?"disabled":""}>${DOC.busy?"正在检查…":r?"再检查一次":"开始体检"}</button>
-      ${isLocal()?`<button class="btn" data-act="logs">查看日志</button>`:""}<button class="btn" data-act="report-copy">复制诊断信息</button>
-      <a class="btn link" href="${ISSUES}" target="_blank" rel="noopener">报告问题</a>${isLocal()?`<button class="btn link" data-act="restart">重启看板</button>`:""}</div>
+    <p class="small ${r.ok?"":"err"}" style="margin-top:10px">${r.ok?t("都正常。"):t("标红的是有问题的地方，按旁边的说明处理；处理不了就复制诊断信息去报告问题。")}</p>
+    ${(r.history||[]).length?`<details><summary class="small">${t("最近 {n} 次生成",{n:r.history.length})}</summary><ul class="hist">${r.history.map(h=>`<li>${esc(fmtTime(h.at))}　${esc(LB[h.kind]||h.kind||"")}　${h.ok?t("成功"):`<b>${t("失败")}</b>`}　${esc(h.message||"")}</li>`).join("")}</ul></details>`:""}` : "";
+  return `<section class="section" id="doctor"><h2>${t("体检和排查")}</h2>
+    <p class="mute">${t("哪里不对劲，先点“开始体检”：一项项检查，有问题的地方会告诉你怎么办。")}</p>
+    <div class="actions"><button class="btn pri" data-act="doctor-run" ${DOC.busy?"disabled":""}>${DOC.busy?t("正在检查…"):r?t("再检查一次"):t("开始体检")}</button>
+      ${isLocal()?`<button class="btn" data-act="logs">${t("查看日志")}</button>`:""}<button class="btn" data-act="report-copy">${t("复制诊断信息")}</button>
+      <a class="btn link" href="${ISSUES}" target="_blank" rel="noopener">${t("报告问题")}</a>${isLocal()?`<button class="btn link" data-act="restart">${t("重启看板")}</button>`:""}</div>
     ${DOC.err?`<p class="err">${esc(DOC.err)}</p>`:""}${list}</section>`;
 }
 async function runDoctor(){
@@ -1515,39 +1972,39 @@ async function copyText(text, ok){
 async function copyReport(){
   try{
     const r=await api("/api/report");
-    if(!await copyText(r.text, "诊断信息已复制，可以贴到 GitHub 上的问题里（不含密钥）")) showLogText("诊断信息（复制下面的内容）", r.text, "");
+    if(!await copyText(r.text, t("诊断信息已复制，可以贴到 GitHub 上的问题里（不含密钥）"))) showLogText(t("诊断信息（复制下面的内容）"), r.text, "");
   }catch(e){ toast(e); }
 }
 let logName="serve";
 function showLogText(title, text, path){
-  const dlg=$("#logdlg"); $("#logtext").textContent=text||"（还没有内容）"; $("#logpath").textContent=path||title||"";
+  const dlg=$("#logdlg"); $("#logtext").textContent=text||t("（还没有内容）"); $("#logpath").textContent=path||title||"";
   for(const b of dlg.querySelectorAll("[data-log]")) b.setAttribute("aria-pressed", b.dataset.log===logName && !title ? "true":"false");
   if(!dlg.open) dlg.showModal();
 }
 async function openLogs(name){
   logName=name||logName;
-  try{ const r=await api(`/api/logs?name=${logName}&lines=400`); showLogText("", r.exists?r.text:"这个日志还没有内容。", r.path); const pre=$("#logtext"); pre.scrollTop=pre.scrollHeight; }
+  try{ const r=await api(`/api/logs?name=${logName}&lines=400`); showLogText("", r.exists?r.text:t("这个日志还没有内容。"), r.path); const pre=$("#logtext"); pre.scrollTop=pre.scrollHeight; }
   catch(e){ toast(e); }
 }
 async function restartDash(){
   try{ await api("/api/restart",{method:"POST"}); }catch(e){ toast(e); return; }
-  toast("正在重启看板，好了会自动刷新");
+  toast(t("正在重启看板，好了会自动刷新"));
   let down=false;
-  const t=setInterval(async()=>{
-    try{ await fetch("/api/job",{cache:"no-store"}); if(down){ clearInterval(t); location.reload(); } }
+  const timer=setInterval(async()=>{
+    try{ await fetch("/api/job",{cache:"no-store"}); if(down){ clearInterval(timer); location.reload(); } }
     catch{ down=true; }
   }, 1000);
-  setTimeout(()=>{ clearInterval(t); location.reload(); }, 40000);
+  setTimeout(()=>{ clearInterval(timer); location.reload(); }, 40000);
 }
 async function doAct(a){
   if(a==="toast-close"){ $("#toast").hidden=true; return; }
   if(a==="logs-close"){ $("#logdlg").close(); return; }
   if(a==="logs-refresh") return openLogs();
-  if(a==="logs-copy") return copyText($("#logtext").textContent, "已复制");
+  if(a==="logs-copy") return copyText($("#logtext").textContent, t("已复制"));
   if(a==="fail-dismiss"){ try{ localStorage.setItem("fail-dismiss", S.job?.last?.at||""); }catch{} $("#jobbar").hidden=true; return; }
   $("#toast").hidden=true;
   if(a.startsWith("retry:")){
-    try{ S.job=await api(`/api/run/${a.slice(6)}`,{method:"POST"}); showJob(); watchJob(); toast("重新开始生成了，好了会自动显示"); }catch(e){ toast(e); }
+    try{ S.job=await api(`/api/run/${a.slice(6)}`,{method:"POST"}); showJob(); watchJob(); toast(t("重新开始生成了，好了会自动显示")); }catch(e){ toast(e); }
     return;
   }
   if(a.startsWith("url:")){ window.open(a.slice(4),"_blank","noopener"); return; }
@@ -1563,7 +2020,7 @@ async function doAct(a){
     try{
       const r=await api("/api/export"); const url=URL.createObjectURL(new Blob([r.sql],{type:"application/sql"}));
       const link=Object.assign(document.createElement("a"),{href:url, download:r.filename}); document.body.append(link); link.click(); link.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 5000); toast(`已导出 ${r.filename}，在浏览器的下载文件夹里`);
+      setTimeout(()=>URL.revokeObjectURL(url), 5000); toast(t("已导出 {f}，在浏览器的下载文件夹里",{f:r.filename}));
     }catch(e){ toast(e); }
     return;
   }
@@ -1574,16 +2031,16 @@ async function doAct(a){
 function versionSection(){
   const u=S.update; if(!u) return "";
   const latest=u.latest?.version;
-  const line = u.available ? `有新版本 <b>v${esc(latest)}</b>`+(u.latest?.url?`（<a href="${esc(u.latest.url)}" target="_blank" rel="noopener">更新内容</a>）`:"") : "已经是最新版本";
+  const line = u.available ? t("有新版本 <b>v{v}</b>",{v:esc(latest)})+(u.latest?.url?`${t("（")}<a href="${esc(u.latest.url)}" target="_blank" rel="noopener">${t("更新内容")}</a>${t("）")}`:"") : t("已经是最新版本");
   const act = u.available ? (u.method==="fork"
-      ? (u.syncUrl?`<a class="btn" href="${esc(u.syncUrl)}" target="_blank" rel="noopener">去 GitHub 同步</a>`:"")
-      : u.method==="none" ? `<span class="small faint">这份代码不是用安装脚本装的，请自己 git pull</span>` : `<button class="btn pri" data-upd="go">更新</button>`) : "";
-  return `<section class="section"><h2>版本</h2>
-      <p>当前 <b>v${esc(u.current)}</b>，${line}。</p>
-      ${u.method==="fork"?`<p class="small faint">云端版的代码在你 fork 的仓库里：有新版本时到 GitHub 上你的仓库页面点 <b>Sync fork</b>，Cloudflare 会自动重新部署。</p>`:""}
-      ${isLocal()?`<label class="optrow"><input type="checkbox" id="cfg-auto" ${u.auto?"checked":""}> 自动更新（有新版本时，在看板 10 分钟没人用、也没在生成推荐的时候自动更新）</label>`:""}
-      ${isLocal()&&S.autostart!=null?`<label class="optrow"><input type="checkbox" id="cfg-boot" ${S.autostart?"checked":""}> 开机后在后台自动运行（关掉的话，要用时从应用列表打开 The Robot Times）</label>`:""}
-      <div class="actions">${act}${isLocal()?`<button class="btn" data-upd="check">检查更新</button>`:""}</div></section>`;
+      ? (u.syncUrl?`<a class="btn" href="${esc(u.syncUrl)}" target="_blank" rel="noopener">${t("去 GitHub 同步")}</a>`:"")
+      : u.method==="none" ? `<span class="small faint">${t("这份代码不是用安装脚本装的，请自己 git pull")}</span>` : `<button class="btn pri" data-upd="go">${t("更新")}</button>`) : "";
+  return `<section class="section"><h2>${t("版本")}</h2>
+      <p>${t("当前 <b>v{v}</b>，",{v:esc(u.current)})}${line}${t("。")}</p>
+      ${u.method==="fork"?`<p class="small faint">${t("云端版的代码在你 fork 的仓库里：有新版本时到 GitHub 上你的仓库页面点 <b>Sync fork</b>，Cloudflare 会自动重新部署。")}</p>`:""}
+      ${isLocal()?`<label class="optrow"><input type="checkbox" id="cfg-auto" ${u.auto?"checked":""}> ${t("自动更新（有新版本时，在看板 10 分钟没人用、也没在生成推荐的时候自动更新）")}</label>`:""}
+      ${isLocal()&&S.autostart!=null?`<label class="optrow"><input type="checkbox" id="cfg-boot" ${S.autostart?"checked":""}> ${t("开机后在后台自动运行（关掉的话，要用时从应用列表打开 The Robot Times）")}</label>`:""}
+      <div class="actions">${act}${isLocal()?`<button class="btn" data-upd="check">${t("检查更新")}</button>`:""}</div></section>`;
 }
 
 /* 新版本提示：报头下面一条，点“以后再说”这个版本就不再提示 */
@@ -1591,17 +2048,17 @@ function showUpdate(){
   const el=$("#updbar"), u=S.update;
   let skip=""; try{ skip=localStorage.getItem("upd-skip")||""; }catch{}
   if(u && (u.state==="updating"||u.state==="restarting")){
-    el.innerHTML=`<span class="dot" aria-hidden="true"></span><span>正在更新到 v${esc(u.latest?.version||"")}……大约一分钟，好了页面会自动刷新。</span>`;
+    el.innerHTML=`<span class="dot" aria-hidden="true"></span><span>${t("正在更新到 v{v}……大约一分钟，好了页面会自动刷新。",{v:esc(u.latest?.version||"")})}</span>`;
     el.hidden=false; return;
   }
   if(u && u.state==="failed"){
-    el.innerHTML=`<span>更新没成功：${esc(u.error||"")}。现在用的还是 v${esc(u.current)}。</span><span class="acts">${actBtns(["logs"])}<button class="btn link" data-upd="close">知道了</button></span>`;
+    el.innerHTML=`<span>${t("更新没成功：{e}。现在用的还是 v{v}。",{e:esc(u.error||""),v:esc(u.current)})}</span><span class="acts">${actBtns(["logs"])}<button class="btn link" data-upd="close">${t("知道了")}</button></span>`;
     el.hidden=false; return;
   }
   if(!u || !u.available || skip===u.latest.version){ el.hidden=true; return; }
-  const go = u.method==="fork" ? (u.syncUrl?`<a class="btn" href="${esc(u.syncUrl)}" target="_blank" rel="noopener">去 GitHub 同步</a>`:"")
-    : u.method==="none" ? "" : `<button class="btn pri" data-upd="go">更新</button>`;
-  el.innerHTML=`<span style="flex:1 1 320px">有新版本 <b>v${esc(u.latest.version)}</b>（现在是 v${esc(u.current)}）${u.latest.notes?`<details><summary class="small">更新内容</summary><div class="updnotes">${esc(u.latest.notes)}</div></details>`:""}</span><span class="acts">${go}<button class="btn link" data-upd="skip">以后再说</button></span>`;
+  const go = u.method==="fork" ? (u.syncUrl?`<a class="btn" href="${esc(u.syncUrl)}" target="_blank" rel="noopener">${t("去 GitHub 同步")}</a>`:"")
+    : u.method==="none" ? "" : `<button class="btn pri" data-upd="go">${t("更新")}</button>`;
+  el.innerHTML=`<span style="flex:1 1 320px">${t("有新版本 <b>v{v}</b>（现在是 v{c}）",{v:esc(u.latest.version),c:esc(u.current)})}${u.latest.notes?`<details><summary class="small">${t("更新内容")}</summary><div class="updnotes">${esc(u.latest.notes)}</div></details>`:""}</span><span class="acts">${go}<button class="btn link" data-upd="skip">${t("以后再说")}</button></span>`;
   el.hidden=false;
 }
 let updTimer=null;
@@ -1616,7 +2073,7 @@ function watchUpdate(){
   updTimer=setInterval(async()=>{
     try{
       const u=await api("/api/update");
-      if(u.current===want){ clearInterval(updTimer); updTimer=null; toast(`已更新到 v${want}`); setTimeout(()=>location.reload(),800); return; }
+      if(u.current===want){ clearInterval(updTimer); updTimer=null; toast(t("已更新到 v{v}",{v:want})); setTimeout(()=>location.reload(),800); return; }
       S.update=u; showUpdate();
       if(u.state==="failed"){ clearInterval(updTimer); updTimer=null; }
     }catch{ /* 看板正在重启，接着等 */ }
@@ -1637,9 +2094,10 @@ const WX_ICONS={
 };
 function weatherEl(w, today){
   const old = !w.live && w.date && w.date!==today;
-  const range = w.tmin!=null&&w.tmax!=null ? `今天 ${+w.tmin}°–${+w.tmax}°` : "";
-  const tip = [w.city, w.live?"实时":old?fmtDate(w.date)+"的预报":"今天的预报", range, w.pop!=null?`降水概率 ${+w.pop}%`:""].filter(Boolean).join("，");
-  return `<button class="wx" data-wx title="${esc(tip)}，点一下换地点" aria-label="天气：${esc(w.city)} ${esc(w.text)}，点一下换地点"><svg class="wx-ic wx-${esc(w.kind||"cloud")}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${WX_ICONS[w.kind]||WX_ICONS.cloud}</svg><span>${esc(w.city)} ${esc(w.text)}</span><b>${w.temp!=null?`${+w.temp}°`:`${+w.tmin}°–${+w.tmax}°`}</b>${w.temp!=null&&range?`<small>${+w.tmin}°/${+w.tmax}°</small>`:""}</button>`;
+  const range = w.tmin!=null&&w.tmax!=null ? t("今天 {a}°–{b}°",{a:+w.tmin,b:+w.tmax}) : "";
+  const tip = [w.city, w.live?t("实时"):old?t("{d}的预报",{d:fmtDate(w.date)}):t("今天的预报"), range, w.pop!=null?t("降水概率 {p}%",{p:+w.pop}):""].filter(Boolean).join(t("，"));
+  const text = wxText(w);
+  return `<button class="wx" data-wx title="${esc(tip)}${t("，点一下换地点")}" aria-label="${t("天气：")}${esc(w.city)} ${esc(text)}${t("，点一下换地点")}"><svg class="wx-ic wx-${esc(w.kind||"cloud")}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${WX_ICONS[w.kind]||WX_ICONS.cloud}</svg><span>${esc(w.city)} ${esc(text)}</span><b>${w.temp!=null?`${+w.temp}°`:`${+w.tmin}°–${+w.tmax}°`}</b>${w.temp!=null&&range?`<small>${+w.tmin}°/${+w.tmax}°</small>`:""}</button>`;
 }
 
 /* 点天气：输入地点（Open-Meteo 的地名搜索，免费），选中后浏览器记住；也可以改回“用我的位置” */
@@ -1651,12 +2109,12 @@ function openWxPop(btn){
   if(document.querySelector(".wxpop")){ closeWxPop(); return; }
   const r=btn.getBoundingClientRect(), place=wxPlace();
   const pop=document.createElement("div");
-  pop.className="wxpop"; pop.setAttribute("role","dialog"); pop.setAttribute("aria-label","天气地点");
+  pop.className="wxpop"; pop.setAttribute("role","dialog"); pop.setAttribute("aria-label",t("天气地点"));
   pop.style.top=`${r.bottom+scrollY+8}px`; pop.style.right=`${Math.max(12, document.documentElement.clientWidth-r.right)}px`;
-  pop.innerHTML=`<p class="lbl">天气地点</p>
-    <input id="wx-q" type="text" placeholder="输入城市，例如 杭州、上海、Boston" autocomplete="off">
+  pop.innerHTML=`<p class="lbl">${t("天气地点")}</p>
+    <input id="wx-q" type="text" placeholder="${t("输入城市，例如 杭州、上海、Boston")}" autocomplete="off">
     <ul id="wx-res" role="listbox"></ul>
-    <div class="wxpop-foot"><span>现在：${esc(S.weather?.city||"—")}${place?"（手动）":"（自动定位）"}</span>${place?`<button id="wx-geo" class="mlink">改回用我的位置</button>`:""}</div>`;
+    <div class="wxpop-foot"><span>${t("现在：")}${esc(S.weather?.city||"—")}${place?t("（手动）"):t("（自动定位）")}</span>${place?`<button id="wx-geo" class="mlink">${t("改回用我的位置")}</button>`:""}</div>`;
   document.body.appendChild(pop);
   const q=pop.querySelector("#wx-q"); q.focus();
   q.addEventListener("input",()=>{ clearTimeout(wxTimer); wxTimer=setTimeout(()=>wxSearch(q.value.trim()),300); });
@@ -1666,14 +2124,14 @@ function openWxPop(btn){
 async function wxSearch(name){
   const ul=document.querySelector("#wx-res"); if(!ul) return;
   if(!name){ ul.innerHTML=""; return; }
-  ul.innerHTML=`<li class="mute">查找中…</li>`;
+  ul.innerHTML=`<li class="mute">${t("查找中…")}</li>`;
   try{
-    const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?${new URLSearchParams({name, count:"6", language:"zh", format:"json"})}`);
+    const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?${new URLSearchParams({name, count:"6", language:LANG, format:"json"})}`);
     const d=await r.json();
     const rows=(d.results||[]);
     if(document.querySelector("#wx-q")?.value.trim()!==name) return;
-    ul.innerHTML = rows.length ? rows.map(x=>`<li><button data-wxpick="${esc(JSON.stringify({name:x.name, lat:+x.latitude.toFixed(3), lon:+x.longitude.toFixed(3)}))}"><b>${esc(x.name)}</b><span>${esc([x.admin1,x.country].filter(Boolean).join("，"))}</span></button></li>`).join("") : `<li class="mute">没找到“${esc(name)}”，换个写法试试</li>`;
-  }catch{ ul.innerHTML=`<li class="mute">查不到，稍后再试</li>`; }
+    ul.innerHTML = rows.length ? rows.map(x=>`<li><button data-wxpick="${esc(JSON.stringify({name:x.name, lat:+x.latitude.toFixed(3), lon:+x.longitude.toFixed(3)}))}"><b>${esc(x.name)}</b><span>${esc([x.admin1,x.country].filter(Boolean).join(t("，")))}</span></button></li>`).join("") : `<li class="mute">${t("没找到“{q}”，换个写法试试",{q:esc(name)})}</li>`;
+  }catch{ ul.innerHTML=`<li class="mute">${t("查不到，稍后再试")}</li>`; }
 }
 
 /* 实时天气：浏览器定位后直接查 Open-Meteo（免费、不用密钥），城市名用 BigDataCloud 的免费反查。
@@ -1683,6 +2141,11 @@ const WX_CODES={0:["晴","sun"],1:["晴间多云","partly"],2:["多云","partly"
   51:["毛毛雨","rain"],53:["毛毛雨","rain"],55:["毛毛雨","rain"],56:["冻毛毛雨","rain"],57:["冻毛毛雨","rain"],61:["小雨","rain"],63:["中雨","rain"],65:["大雨","rain"],
   66:["冻雨","rain"],67:["冻雨","rain"],71:["小雪","snow"],73:["中雪","snow"],75:["大雪","snow"],77:["雪粒","snow"],80:["阵雨","rain"],81:["阵雨","rain"],82:["强阵雨","rain"],
   85:["阵雪","snow"],86:["强阵雪","snow"],95:["雷阵雨","storm"],96:["雷阵雨伴冰雹","storm"],99:["雷阵雨伴冰雹","storm"]};
+const WX_EN={0:"Clear",1:"Mostly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Rime fog",51:"Drizzle",53:"Drizzle",55:"Drizzle",56:"Freezing drizzle",57:"Freezing drizzle",
+  61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",71:"Light snow",73:"Snow",75:"Heavy snow",77:"Snow grains",80:"Showers",81:"Showers",82:"Heavy showers",
+  85:"Snow showers",86:"Heavy snow showers",95:"Thunderstorm",96:"Thunderstorm with hail",99:"Thunderstorm with hail"};
+// 天气文字按界面语言：有天气代码就按代码查（每天早上存的那份也带代码）
+const wxText = w => w.code==null ? (w.text||"") : isEn() ? (WX_EN[w.code]||w.text||"") : (WX_CODES[w.code]?.[0]||w.text||"");
 function wxCache(v){ try{ if(v) localStorage.setItem("wx",JSON.stringify(v)); else return JSON.parse(localStorage.getItem("wx")||"null"); }catch{ return null; } }
 function locate(){
   return new Promise(res=>{
@@ -1692,10 +2155,10 @@ function locate(){
 }
 async function cityName(lat, lon){
   try{
-    const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`);
+    const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=${LANG}`);
     const d=await r.json();
-    return String(d.city||d.locality||d.principalSubdivision||"").replace(/市$/,"") || "当前位置";
-  }catch{ return "当前位置"; }
+    return String(d.city||d.locality||d.principalSubdivision||"").replace(/市$/,"") || t("当前位置");
+  }catch{ return t("当前位置"); }
 }
 function wxPlace(v){ try{ if(v===undefined) return JSON.parse(localStorage.getItem("wx-place")||"null"); if(v) localStorage.setItem("wx-place",JSON.stringify(v)); else localStorage.removeItem("wx-place"); localStorage.removeItem("wx"); }catch{ return null; } }
 async function liveWeather(force){
@@ -1713,7 +2176,7 @@ async function liveWeather(force){
     const d=await r.json(), c=d.current||{};
     let [text, kind]=WX_CODES[c.weather_code]||["多云","cloud"];
     if(!c.is_day && (kind==="sun"||kind==="partly")) kind = kind==="sun" ? "moon" : "cloud";
-    const w={live:true, city: place ? place.name : await cityName(at.lat, at.lon), text, kind,
+    const w={live:true, code:c.weather_code, city: place ? place.name : await cityName(at.lat, at.lon), text, kind,
       temp:Math.round(c.temperature_2m), tmax:Math.round(d.daily.temperature_2m_max[0]), tmin:Math.round(d.daily.temperature_2m_min[0]),
       pop:d.daily.precipitation_probability_max?.[0]??null};
     S.weather=w; wxCache({at:Date.now(), w}); renderChrome();
@@ -1721,7 +2184,7 @@ async function liveWeather(force){
 }
 function renderChrome(){
   document.body.className=document.body.className.replace(/\btab-\w+/g,"").trim()+` tab-${S.tab}`;
-  const navHtml=TABS.map(([k,l])=>`<button data-tab="${k}" ${S.tab===k?'aria-current="page"':""}>${l}</button>`).join("");
+  const navHtml=TABS.map(([k,l])=>`<button data-tab="${k}" ${S.tab===k?'aria-current="page"':""}>${t(l)}</button>`).join("");
   document.querySelectorAll(".nav").forEach(n=>n.innerHTML=navHtml);
   const now=new Date(); const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
   const s=S.settings||{};
@@ -1730,20 +2193,20 @@ function renderChrome(){
   if(document.title!==site) document.title=site;
   const d0=S.days[0], st=d0?.stats||{}, picks=(d0?.picks||[]);
   const readN=picks.filter(isRead).length;
-  $("#dateline").innerHTML=`<b>${esc(longDate(today).replace("　"," "))}</b><button class="mlink" data-tab="today">今日早报</button>`;
-  $("#edition").innerHTML=S.ready?(s.categories||[]).map(c=>`<span>${esc(c)}</span>`).join("")+`<span>早报</span>`:"";
-  $("#m1r").innerHTML=S.ready?`${S.weather?`<span class="wx-m">${weatherEl(S.weather, today)}</span>`:""}<button class="sub-btn" data-tab="today">今日 ${picks.length} 篇</button><button class="acct" data-tab="cfg">设置 <svg viewBox="0 0 10 6" width="9" height="6" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1l4 4 4-4"/></svg></button>`:"";
-  $("#mastsub").innerHTML = (S.weather?weatherEl(S.weather, today):"") + (S.ready&&d0 ? `<span class="tick">arXiv 新论文 <b>${st.candidates??"—"}</b>　已读 <b>${readN}/${picks.length}</b></span>` : "");
+  $("#dateline").innerHTML=`<b>${esc(longDate(today).replace("　"," "))}</b><button class="mlink" data-tab="today">${t("今日早报")}</button>`;
+  $("#edition").innerHTML=S.ready?(s.categories||[]).map(c=>`<span>${esc(c)}</span>`).join("")+`<span>${t("早报")}</span>`:"";
+  $("#m1r").innerHTML=S.ready?`${S.weather?`<span class="wx-m">${weatherEl(S.weather, today)}</span>`:""}<button class="sub-btn" data-tab="today">${t("今日 {n} 篇",{n:picks.length})}</button><button class="acct" data-tab="cfg">${t("设置")} <svg viewBox="0 0 10 6" width="9" height="6" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1l4 4 4-4"/></svg></button>`:"";
+  $("#mastsub").innerHTML = (S.weather?weatherEl(S.weather, today):"") + (S.ready&&d0 ? `<span class="tick">${t("arXiv 新论文")} <b>${st.candidates??"—"}</b>　${t("已读")} <b>${readN}/${picks.length}</b></span>` : "");
 }
 function render(){
   renderChrome();
   const m=$("#main");
-  if(S.error){ m.innerHTML=`${emptyBox("打不开数据", esc(S.error), true)}<div class="actions" style="margin-top:12px"><button class="btn" onclick="location.reload()">重新载入</button></div>`; return; }
+  if(S.error){ m.innerHTML=`${emptyBox(t("打不开数据"), esc(S.error), true)}<div class="actions" style="margin-top:12px"><button class="btn" onclick="location.reload()">${t("重新载入")}</button></div>`; return; }
   if(!S.ready) return;
   const a=document.activeElement, focusId=a?.id, selStart=a?.selectionStart;
   if(needsSetup()){ m.innerHTML=viewSetup(); return; }
   m.innerHTML=({today:viewToday,news:viewNews,week:viewWeek,lib:viewLib,notes:viewNotes,cfg:viewCfg})[S.tab]()
-    + `<footer class="colophon"><span>${esc(S.site?.name||"The Robot Times")}　由 arXiv 和 Hugging Face 的公开数据生成，摘要由大模型撰写，请以原文为准</span><span class="keys">快捷键：<kbd>J</kbd><kbd>K</kbd> 上下篇，<kbd>Enter</kbd> 打开，<kbd>←</kbd><kbd>→</kbd> 文章间切换，<kbd>Esc</kbd> 关闭</span></footer>`;
+    + `<footer class="colophon"><span>${esc(S.site?.name||"The Robot Times")}　${t("由 arXiv 和 Hugging Face 的公开数据生成，摘要由大模型撰写，请以原文为准")}</span><span class="keys">${t("快捷键：<kbd>J</kbd><kbd>K</kbd> 上下篇，<kbd>Enter</kbd> 打开，<kbd>←</kbd><kbd>→</kbd> 文章间切换，<kbd>Esc</kbd> 关闭")}</span></footer>`;
   if(focusId&&document.getElementById(focusId)&&!document.getElementById(focusId).closest(".reader")){ const el=document.getElementById(focusId); el.focus(); try{ if(selStart!=null) el.setSelectionRange(selStart,selStart);}catch(e){} }
   if(S.open) refreshReader();
 }
@@ -1767,7 +2230,7 @@ async function loadFull(id){
 function figHtml(f, i){
   const label = `<b>${esc(f.label||"")}</b>`;
   const media = (f.images||[]).length
-    ? f.images.map((src,j)=>`<button class="img" data-zoom="${i}:${j}" aria-label="放大 ${esc(f.label||"图")}"><img src="${esc(src)}" alt="${esc(f.label||"")}：${esc((f.caption||"").slice(0,120))}" loading="lazy" decoding="async"></button>`).join("")
+    ? f.images.map((src,j)=>`<button class="img" data-zoom="${i}:${j}" aria-label="${t("放大 {x}",{x:esc(f.label||t("图"))})}"><img src="${esc(src)}" alt="${esc(f.label||"")}：${esc((f.caption||"").slice(0,120))}" loading="lazy" decoding="async"></button>`).join("")
     : (f.rows||[]).length ? `<div class="ftable"><table>${f.rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table></div>` : "";
   return `<figure class="fig rv">${media}<figcaption>${f.note?`<p class="note">${label}${esc(f.note)}</p>`:`<p class="note">${label}</p>`}${f.caption?`<p class="orig">${esc(f.caption)}</p>`:""}</figcaption></figure>`;
 }
@@ -1777,17 +2240,17 @@ function secHtml(no, title, body, cls="", aside=""){
 function analysisHtml(p){
   const a=p.analysis;
   if(!a){
-    if(p.hasAnalysis && !full[p.id]) return `<div class="skel" aria-label="正在载入解读"><i></i><i></i><i></i><i></i></div>`;
-    return p.summary ? `<section class="sec take"><div class="sec-h"><h2>要点</h2></div><div class="prose"><p>${esc(p.summary)}</p></div></section>` : "";
+    if(p.hasAnalysis && !full[p.id]) return `<div class="skel" aria-label="${t("正在载入解读")}"><i></i><i></i><i></i><i></i></div>`;
+    return p.summary ? `<section class="sec take"><div class="sec-h"><h2>${t("要点")}</h2></div><div class="prose"><p>${esc(p.summary)}</p></div></section>` : "";
   }
   const review=a.review||[a.tldr,a.critique].filter(Boolean).join("\n\n"); // 旧格式的解读也能显示
   const figs=a.figures||[];
-  return `${review?`<section class="sec take"><div class="sec-h"><h2>解读</h2><small>${a.source==="full"?"读了全文":"只依据摘要"}，由大模型撰写，请以原文为准</small></div><div class="prose">${paras(review)}</div></section>`:""}
+  return `${review?`<section class="sec take"><div class="sec-h"><h2>${t("解读")}</h2><small>${a.source==="full"?t("读了全文"):t("只依据摘要")}${t("，由大模型撰写，请以原文为准")}</small></div><div class="prose">${paras(review)}</div></section>`:""}
     ${figs.map((f,i)=>figHtml(f,i)).join("")}`;
 }
 function absHtml(p){
   const zh=p.abstractZh, lang=zh?absLang:"en";
-  return `<section class="sec rv" id="abs"><div class="abs-h"><h2>摘要</h2>${zh?`<div class="seg" role="group" aria-label="摘要语言"><button data-abs="zh" aria-pressed="${lang==="zh"}">中文</button><button data-abs="en" aria-pressed="${lang==="en"}">English</button></div>`:""}</div>
+  return `<section class="sec rv" id="abs"><div class="abs-h"><h2>${t("摘要")}</h2>${zh?`<div class="seg" role="group" aria-label="${t("摘要语言")}"><button data-abs="zh" aria-pressed="${lang==="zh"}">中文</button><button data-abs="en" aria-pressed="${lang==="en"}">English</button></div>`:""}</div>
     <p class="abs ${lang}">${esc(lang==="zh"?zh:(p.abstract||""))}</p></section>`;
 }
 function articleHtml(id){
@@ -1795,36 +2258,36 @@ function articleHtml(id){
   const idx=S.order.indexOf(id), prev=S.order[idx-1], next=S.order[idx+1];
   let d=0; const st=()=>`style="--d:${(d++)*70}ms"`;
   return `<header class="hd">
-      <p class="kicker rv" ${st()}>${esc(mode?MODES[mode].name:"论文")}${p.comment&&/accept|to appear/i.test(p.comment)?`<span class="min">${esc(venueText(p.venue))} 已接收</span>`:""}</p>
+      <p class="kicker rv" ${st()}>${esc(mode?modeName(mode):t("论文"))}${p.comment&&/accept|to appear/i.test(p.comment)?`<span class="min">${t("{v} 已接收",{v:esc(venueText(p.venue))})}</span>`:""}</p>
       <h1 class="rv" ${st()}>${esc(p.title)}</h1>
       ${p.titleZh?`<p class="zh-title rv" ${st()}>${esc(p.titleZh)}</p>`:""}
-      <p class="authors rv" ${st()}>${esc((p.authors||[]).join(", "))}<br><span class="faint">${[venueText(p.venue), fmtDate(p.date), `arXiv ${p.id}`, p.signals].filter(Boolean).map(esc).join("，")}</span></p>
+      <p class="authors rv" ${st()}>${esc((p.authors||[]).join(", "))}<br><span class="faint">${[venueText(p.venue), fmtDate(p.date), `arXiv ${p.id}`, p.signals].filter(Boolean).map(esc).join(t("，"))}</span></p>
     </header>
     <div class="tools rv" id="tools" ${st()}></div>
-    ${p.why||p.tip?`<div class="why-box rv" ${st()}>${p.why?`<p><b>为什么推荐</b>${esc(p.why)}</p>`:""}${p.tip?`<p><b>怎么读</b>${esc(p.tip)}</p>`:""}</div>`:""}
-    <div class="figure rv" title="综合分按设置里的权重计算"><span><b>${total(p).toFixed(1)}</b>综合</span><span>相关 ${fmt1(s.rel)}</span>${s.llm!=null?`<span>模型判断 ${fmt1(s.llm)}</span>`:""}<span>影响 ${fmt1(s.impact)}</span><span>热度 ${fmt1(s.buzz)}</span></div>
+    ${p.why||p.tip?`<div class="why-box rv" ${st()}>${p.why?`<p><b>${t("为什么推荐")}</b>${esc(p.why)}</p>`:""}${p.tip?`<p><b>${t("怎么读")}</b>${esc(p.tip)}</p>`:""}</div>`:""}
+    <div class="figure rv" title="${t("综合分按设置里的权重计算")}"><span><b>${total(p).toFixed(1)}</b>${t("综合")}</span><span>${t("相关 {r}",{r:fmt1(s.rel)})}</span>${s.llm!=null?`<span>${t("模型判断 {l}",{l:fmt1(s.llm)})}</span>`:""}<span>${t("影响 {i}",{i:fmt1(s.impact)})}</span><span>${t("热度 {b}",{b:fmt1(s.buzz)})}</span></div>
     ${absHtml(p)}
     <div id="analysis" style="display:contents">${analysisHtml(p)}</div>
-    ${(p.related||[]).length?`<section class="sec rv"><h2>你库里相近的</h2><ul class="related">${p.related.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></section>`:""}
+    ${(p.related||[]).length?`<section class="sec rv"><h2>${t("你库里相近的")}</h2><ul class="related">${p.related.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></section>`:""}
     <section class="notebox rv" id="note-sec">
-      <div style="display:flex;align-items:baseline;gap:12px"><h2>我的笔记</h2><span class="saved" id="saved"></span></div>
-      <div class="seg" id="seg" role="group" aria-label="阅读状态">${STATUS.map(([k,l])=>`<button data-st="${k}" aria-pressed="${(n.status||"todo")===k}">${l}</button>`).join("")}</div>
-      <div class="flags" id="flags">${FLAGS.map(f=>`<button class="flag" data-flag="${esc(f)}" aria-pressed="${(n.flags||[]).includes(f)}">${esc(f)}</button>`).join("")}</div>
-      <textarea id="note-ta" rows="7" aria-label="笔记" placeholder="用自己的话写 3 到 5 句：&#10;问题：&#10;核心 idea：&#10;关键结果：&#10;我的看法 / 和 X 的区别：">${esc(n.note||"")}</textarea>
-      <p class="small faint">先写笔记再加入 Zotero，笔记会一起写进条目下面。</p>
+      <div style="display:flex;align-items:baseline;gap:12px"><h2>${t("我的笔记")}</h2><span class="saved" id="saved"></span></div>
+      <div class="seg" id="seg" role="group" aria-label="${t("阅读状态")}">${STATUS.map(([k,l])=>`<button data-st="${k}" aria-pressed="${(n.status||"todo")===k}">${t(l)}</button>`).join("")}</div>
+      <div class="flags" id="flags">${FLAGS.map(f=>`<button class="flag" data-flag="${esc(f)}" aria-pressed="${(n.flags||[]).includes(f)}">${esc(t(f))}</button>`).join("")}</div>
+      <textarea id="note-ta" rows="7" aria-label="${t("笔记")}" placeholder="${t("用自己的话写 3 到 5 句：&#10;问题：&#10;核心 idea：&#10;关键结果：&#10;我的看法 / 和 X 的区别：")}">${esc(n.note||"")}</textarea>
+      <p class="small faint">${t("先写笔记再加入 Zotero，笔记会一起写进条目下面。")}</p>
     </section>
-    <div class="rv"><h2>以后的推荐</h2><div class="actions" id="fb" style="margin-top:10px"></div></div>
+    <div class="rv"><h2>${t("以后的推荐")}</h2><div class="actions" id="fb" style="margin-top:10px"></div></div>
     <section class="ai rv" id="ai" ${S.features.ask?"":"hidden"}>
-      <h2>问 AI</h2>
-      <textarea id="ai-q" rows="2" placeholder="例如：它和我库里的 X 方法有什么区别？换到我的任务上会遇到什么问题？" aria-label="问题"></textarea>
-      <details><summary>粘贴原文段落（可选：从 Zotero 打开 PDF，复制方法或实验部分）</summary><textarea id="ai-ctx" rows="5" placeholder="粘贴方法、实验或看不懂的段落" aria-label="原文段落"></textarea></details>
-      <div class="actions"><button class="btn pri" id="ai-ask">提问</button><button class="btn" id="ai-check">检查我的笔记</button><button class="btn link" id="ai-stop" hidden>停止</button></div>
+      <h2>${t("问 AI")}</h2>
+      <textarea id="ai-q" rows="2" placeholder="${t("例如：它和我库里的 X 方法有什么区别？换到我的任务上会遇到什么问题？")}" aria-label="${t("问题")}"></textarea>
+      <details><summary>${t("粘贴原文段落（可选：从 Zotero 打开 PDF，复制方法或实验部分）")}</summary><textarea id="ai-ctx" rows="5" placeholder="${t("粘贴方法、实验或看不懂的段落")}" aria-label="${t("原文段落")}"></textarea></details>
+      <div class="actions"><button class="btn pri" id="ai-ask">${t("提问")}</button><button class="btn" id="ai-check">${t("检查我的笔记")}</button><button class="btn link" id="ai-stop" hidden>${t("停止")}</button></div>
       <div class="ai-out" id="ai-out" hidden></div>
-      <div class="actions"><button class="btn" id="ai-save" hidden>存入笔记</button><span class="small faint" id="ai-note"></span></div>
+      <div class="actions"><button class="btn" id="ai-save" hidden>${t("存入笔记")}</button><span class="small faint" id="ai-note"></span></div>
     </section>
-    <nav class="next" aria-label="翻页">
-      ${prev?`<button data-nav="-1"><small>‹ 上一篇</small><span>${esc(S.papers[prev].titleZh||S.papers[prev].title)}</span></button>`:"<span></span>"}
-      ${next?`<button data-nav="1"><small>下一篇 ›</small><span>${esc(S.papers[next].titleZh||S.papers[next].title)}</span></button>`:"<span></span>"}
+    <nav class="next" aria-label="${t("翻页")}">
+      ${prev?`<button data-nav="-1"><small>${t("‹ 上一篇")}</small><span>${esc(S.papers[prev].titleZh||S.papers[prev].title)}</span></button>`:"<span></span>"}
+      ${next?`<button data-nav="1"><small>${t("下一篇 ›")}</small><span>${esc(S.papers[next].titleZh||S.papers[next].title)}</span></button>`:"<span></span>"}
     </nav>`;
 }
 let readerIO=null;
@@ -1847,12 +2310,12 @@ function openReader(id, focus, dir=1){
     const m=$("#main"), top=m.getBoundingClientRect().top;
     m.style.transformOrigin=`50% ${innerHeight/2-top}px`;
     $("#reader-root").innerHTML=`<div class="scrim" data-close></div>
-    <div class="reader" role="dialog" aria-modal="true" aria-label="论文详情" id="reader">
+    <div class="reader" role="dialog" aria-modal="true" aria-label="${t("论文详情")}" id="reader">
       <div class="reader-bar"><div class="in">
         <span class="where" id="where"></span>
-        <button class="ibtn" data-nav="-1" aria-label="上一篇" title="上一篇（←）">‹</button>
-        <button class="ibtn" data-nav="1" aria-label="下一篇" title="下一篇（→）">›</button>
-        <button class="ibtn" data-close aria-label="关闭" title="关闭（Esc）">×</button>
+        <button class="ibtn" data-nav="-1" aria-label="${t("上一篇")}" title="${t("上一篇（←）")}">‹</button>
+        <button class="ibtn" data-nav="1" aria-label="${t("下一篇")}" title="${t("下一篇（→）")}">›</button>
+        <button class="ibtn" data-close aria-label="${t("关闭")}" title="${t("关闭（Esc）")}">×</button>
       </div><div class="progress" id="progress"></div></div>
       <article class="article" id="article"></article>
     </div>`;
@@ -1862,7 +2325,7 @@ function openReader(id, focus, dir=1){
     requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.add("drawer-on")));
   }
   const r=$("#reader"), art=$("#article");
-  $("#where").innerHTML=`<b>${esc(MODES[TIER_MODE[p.tier]]?.name||"论文")}</b>${idx>=0?`第 ${idx+1} 篇，共 ${S.order.length} 篇`:""}`;
+  $("#where").innerHTML=`<b>${esc(MODES[TIER_MODE[p.tier]]?modeName(TIER_MODE[p.tier]):t("论文"))}</b>${idx>=0?t("第 {i} 篇，共 {n} 篇",{i:idx+1,n:S.order.length}):""}`;
   r.querySelectorAll('.reader-bar [data-nav="-1"]').forEach(b=>b.disabled=!prev);
   r.querySelectorAll('.reader-bar [data-nav="1"]').forEach(b=>b.disabled=!next);
   art.innerHTML=articleHtml(id);
@@ -1873,7 +2336,7 @@ function openReader(id, focus, dir=1){
   if(focus==="note"){ const ta=$("#note-ta"); setTimeout(()=>{ ta.scrollIntoView({block:"center", behavior:smooth()}); ta.focus({preventScroll:true}); }, fresh?420:0); }
   else r.querySelector("[data-close].ibtn").focus({preventScroll:true});
   if(S.zotero[id]) checkZotero(id);
-  if(p.hasAnalysis&&!p.analysis&&!full[id]) loadFull(id).then(()=>{ if(S.open===id) refreshAnalysis(id); }).catch(e=>{ if(S.open===id){ $("#analysis").innerHTML=`<p class="warn">解读没载入：${esc(e.message)}</p>`; } });
+  if(p.hasAnalysis&&!p.analysis&&!full[id]) loadFull(id).then(()=>{ if(S.open===id) refreshAnalysis(id); }).catch(e=>{ if(S.open===id){ $("#analysis").innerHTML=`<p class="warn">${t("解读没载入：")}${esc(e.message)}</p>`; } });
 }
 function refreshAnalysis(id){
   const p=S.papers[id], box=$("#analysis"); if(!box) return;
@@ -1893,7 +2356,7 @@ function closeReader(){
 function navReader(d){ const i=S.order.indexOf(S.open)+d; if(i>=0&&i<S.order.length) openReader(S.order[i], undefined, d); }
 function openZoom(key){
   const [i,j]=key.split(":").map(Number), f=S.papers[S.open]?.analysis?.figures?.[i]; if(!f) return;
-  const z=document.createElement("div"); z.className="zoom"; z.setAttribute("role","dialog"); z.setAttribute("aria-label","查看大图"); z.tabIndex=-1;
+  const z=document.createElement("div"); z.className="zoom"; z.setAttribute("role","dialog"); z.setAttribute("aria-label",t("查看大图")); z.tabIndex=-1;
   z.innerHTML=`<img src="${esc(f.images[j])}" alt="${esc(f.label||"")}"><p>${esc(f.label||"")}　${esc(f.note||f.caption||"")}</p>`;
   const close=()=>{ z.classList.remove("on"); setTimeout(()=>z.remove(), motionOK()?300:0); document.removeEventListener("keydown",onKey,true); };
   const onKey=e=>{ if(e.key==="Escape"){ e.stopPropagation(); close(); } };
@@ -1906,15 +2369,15 @@ async function checkZotero(id){
   if(!S.zotero[id]||!S.features.zotero) return;
   try{
     const r=await api(`/api/zotero/${encodeURIComponent(id)}`);
-    if(r.key){ S.zotero[id]=r.key; if(r.web) zWeb[id]=r.web; zFix[id]=(r.pdf===false||r.inFolder===false)?(r.pdf===false?"缺 PDF":`不在“${r.folder}”里`):false; zFixLabel[id]=r.pdf===false?"补全 PDF 和文件夹":`放进 ${r.folder}`; }
-    else { delete S.zotero[id]; if(r.gone) toast("这篇在 Zotero 里已经删掉了，可以重新加入"); }
+    if(r.key){ S.zotero[id]=r.key; if(r.web) zWeb[id]=r.web; zFix[id]=(r.pdf===false||r.inFolder===false)?(r.pdf===false?t("缺 PDF"):t("不在“{f}”里",{f:r.folder})):false; zFixLabel[id]=r.pdf===false?t("补全 PDF 和文件夹"):t("放进 {f}",{f:r.folder}); }
+    else { delete S.zotero[id]; if(r.gone) toast(t("这篇在 Zotero 里已经删掉了，可以重新加入")); }
   }catch(e){ /* 查不到就保持原样 */ return; }
   if(S.open===id) refreshReader(); else render();
 }
 async function removeZotero(id){
   id=id||S.open; if(!id||zBusy) return;
   zBusy=true; if(S.open===id) refreshReader();
-  try{ await api(`/api/zotero/${encodeURIComponent(id)}`,{method:"DELETE"}); delete S.zotero[id]; delete zWeb[id]; toast("已从 Zotero 撤销（移进了 Zotero 的回收站，需要时可以在那里恢复）"); }
+  try{ await api(`/api/zotero/${encodeURIComponent(id)}`,{method:"DELETE"}); delete S.zotero[id]; delete zWeb[id]; toast(t("已从 Zotero 撤销（移进了 Zotero 的回收站，需要时可以在那里恢复）")); }
   catch(e){ toast(e); }
   finally{ zBusy=false; if(S.open===id) refreshReader(); render(); }
 }
@@ -1925,23 +2388,23 @@ function refreshReader(){
   document.querySelectorAll("#flags button").forEach(b=>b.setAttribute("aria-pressed",String((n.flags||[]).includes(b.dataset.flag))));
   const ta=$("#note-ta"); if(ta&&document.activeElement!==ta&&!pending[id]&&(n.note||"")!==ta.value) ta.value=n.note||"";
   const tools=$("#tools"); if(tools) tools.innerHTML=
-    (p.pdf?`<a class="btn pri" href="${esc(p.pdf)}" target="_blank" rel="noopener">打开 PDF</a>`:"")
+    (p.pdf?`<a class="btn pri" href="${esc(p.pdf)}" target="_blank" rel="noopener">${t("打开 PDF")}</a>`:"")
     +(S.zotero[id]
-      ?`<span class="stamp z" style="margin:0">已入 Zotero</span><a class="btn link" href="zotero://select/library/items/${esc(S.zotero[id])}" title="在电脑上的 Zotero 里选中这个条目（需要已同步）">在 Zotero 中打开</a>${zWeb[id]?`<a class="btn link" href="${esc(zWeb[id])}" target="_blank" rel="noopener">网页版</a>`:""}${zFix[id]?`<button class="btn" id="z-add" ${zBusy?"disabled":""} title="${esc(zFix[id])}">${zBusy?"处理中…":esc(zFixLabel[id]||"补全")}</button>`:""}<button class="btn link" id="z-del" ${zBusy?"disabled":""} title="把条目移进 Zotero 的回收站">${zBusy?"处理中…":"撤销"}</button>`
-      :`<button class="btn" id="z-add" ${zBusy||!S.features.zotero?"disabled":""} title="${S.features.zotero?"":"还没配置 Zotero"}">${zBusy?"正在写入…":"加入 Zotero"}</button>`)
+      ?`<span class="stamp z" style="margin:0">${t("已入 Zotero")}</span><a class="btn link" href="zotero://select/library/items/${esc(S.zotero[id])}" title="${t("在电脑上的 Zotero 里选中这个条目（需要已同步）")}">${t("在 Zotero 中打开")}</a>${zWeb[id]?`<a class="btn link" href="${esc(zWeb[id])}" target="_blank" rel="noopener">${t("网页版")}</a>`:""}${zFix[id]?`<button class="btn" id="z-add" ${zBusy?"disabled":""} title="${esc(zFix[id])}">${zBusy?t("处理中…"):esc(zFixLabel[id]||t("补全"))}</button>`:""}<button class="btn link" id="z-del" ${zBusy?"disabled":""} title="${t("把条目移进 Zotero 的回收站")}">${zBusy?t("处理中…"):t("撤销")}</button>`
+      :`<button class="btn" id="z-add" ${zBusy||!S.features.zotero?"disabled":""} title="${S.features.zotero?"":t("还没配置 Zotero")}">${zBusy?t("正在写入…"):t("加入 Zotero")}</button>`)
     +`<span class="ext">${[
         p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">arXiv</a>`:"",
         (p.source||"arxiv")==="arxiv"?`<a href="https://huggingface.co/papers/${esc(p.id)}" target="_blank" rel="noopener">Hugging Face</a>`:"",
         `<a href="https://scholar.google.com/scholar?q=${encodeURIComponent(p.title)}" target="_blank" rel="noopener">Scholar</a>`,
       ].filter(Boolean).join('<i aria-hidden="true">·</i>')}</span>`;
-  const f=$("#fb"); if(f) f.innerHTML=`<button class="btn" data-fb="like" aria-pressed="${fb==="like"}">多推这类</button><button class="btn" data-fb="skip" aria-pressed="${fb==="skip"}">少推这类</button>`;
+  const f=$("#fb"); if(f) f.innerHTML=`<button class="btn" data-fb="like" aria-pressed="${fb==="like"}">${t("多推这类")}</button><button class="btn" data-fb="skip" aria-pressed="${fb==="skip"}">${t("少推这类")}</button>`;
 }
 
 /* ---------- 写入 ---------- */
 const pending={}, chain={}, timers={};
 function patchNote(id, patch, delay){
   S.notes={...S.notes,[id]:{status:"todo",note:"",flags:[],...noteOf(id), ...patch, paperId:id, updatedAt:new Date().toISOString()}};
-  pending[id]=true; const sv=$("#saved"); if(sv&&S.open===id) sv.textContent="保存中…";
+  pending[id]=true; const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("保存中…");
   clearTimeout(timers[id]);
   timers[id]=setTimeout(()=>flush(id), delay||0);
 }
@@ -1949,8 +2412,8 @@ function flush(id){
   const n=S.notes[id], body=JSON.stringify({status:n.status, note:n.note, flags:n.flags});
   chain[id]=(chain[id]||Promise.resolve()).then(()=>api(`/api/notes/${encodeURIComponent(id)}`,{method:"PUT", body})).then(saved=>{
     pending[id]=false; S.notes[id]={...S.notes[id], updatedAt:saved.updatedAt};
-    const sv=$("#saved"); if(sv&&S.open===id) sv.textContent="已保存";
-  }).catch(e=>{ pending[id]=false; const sv=$("#saved"); if(sv) sv.textContent="没保存上"; toast(e); });
+    const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("已保存");
+  }).catch(e=>{ pending[id]=false; const sv=$("#saved"); if(sv) sv.textContent=t("没保存上"); toast(e); });
 }
 window.addEventListener("beforeunload", e=>{ if(Object.values(pending).some(Boolean)){ e.preventDefault(); e.returnValue=""; } });
 
@@ -1962,11 +2425,11 @@ async function addZotero(id){
   try{
     const r=await api(`/api/zotero/${encodeURIComponent(id)}`,{method:"POST"});
     S.zotero[id]=r.key;
-    const where=r.folder?`“${r.folder}”文件夹`:"“我的文库”";
-    toast(r.pdfError ? `已加入 Zotero 的${where}，但 PDF 没加上：${r.pdfError}`
-      : r.existing ? `已放进${where}`
-      : `已加入 Zotero 的${where}${r.pdf?"，PDF 一起存进去了":""}${r.noteError?`（摘要笔记没写上：${r.noteError}）`:""}${isLocal()?"":`。同步后${r.pdf?"就能直接打开":"在条目上右键“查找可用的 PDF”"}`}`);
-    zFix[id]=r.pdfError?"缺 PDF":false;
+    const where=r.folder?t("“{f}”文件夹",{f:r.folder}):t("“我的文库”");
+    toast(r.pdfError ? t("已加入 Zotero 的{w}，但 PDF 没加上：{e}",{w:where,e:r.pdfError})
+      : r.existing ? t("已放进{w}",{w:where})
+      : t("已加入 Zotero 的{w}",{w:where})+(r.pdf?t("，PDF 一起存进去了"):"")+(r.noteError?t("（摘要笔记没写上：{e}）",{e:r.noteError}):"")+(isLocal()?"":(r.pdf?t("。同步后就能直接打开"):t("。同步后在条目上右键“查找可用的 PDF”"))));
+    zFix[id]=r.pdfError?t("缺 PDF"):false;
   }catch(e){ toast(e); }
   finally{ zBusy=false; if(S.open===id) refreshReader(); else render(); }
 }
@@ -1975,18 +2438,18 @@ async function sendFeedback(id, action, quiet){
   const next = prev===action && !quiet ? "clear" : action;
   S.feedback[id] = next==="clear" ? undefined : next; if(S.open===id) refreshReader();
   try{ await api(`/api/feedback/${encodeURIComponent(id)}`,{method:"POST", body:JSON.stringify({action:next})});
-    if(!quiet && next!=="clear") toast(next==="like"?"记下了，之后多推这类论文":"记下了，之后少推这类论文"); }
+    if(!quiet && next!=="clear") toast(next==="like"?t("记下了，之后多推这类论文"):t("记下了，之后少推这类论文")); }
   catch(e){ S.feedback[id]=prev; if(S.open===id) refreshReader(); toast(e); }
 }
 
 /* ---------- 问 AI ---------- */
 async function runAI(kind){
   const id=S.open, n=noteOf(id);
-  if(kind==="check"&&!(n.note||"").trim()){ toast("先写几句笔记，再让 AI 检查。"); return; }
+  if(kind==="check"&&!(n.note||"").trim()){ toast(t("先写几句笔记，再让 AI 检查。")); return; }
   const out=$("#ai-out"), stop=$("#ai-stop"), save=$("#ai-save"), ask=$("#ai-ask"), chk=$("#ai-check"), note=$("#ai-note");
-  aiCtl=new AbortController(); out.hidden=false; out.textContent="正在想…"; stop.hidden=false; save.hidden=true; ask.disabled=chk.disabled=true; note.textContent=""; aiText="";
+  aiCtl=new AbortController(); out.hidden=false; out.textContent=t("正在想…"); stop.hidden=false; save.hidden=true; ask.disabled=chk.disabled=true; note.textContent=""; aiText="";
   try{
-    const resp=await fetch("/api/ask",{method:"POST", signal:aiCtl.signal, headers:{"content-type":"application/json"},
+    const resp=await fetch("/api/ask",{method:"POST", signal:aiCtl.signal, headers:{"content-type":"application/json", "x-lang":LANG},
       body:JSON.stringify({paperId:id, kind, question:$("#ai-q").value.trim(), context:$("#ai-ctx").value, note:n.note||""})});
     if(!resp.ok){ let msg=`HTTP ${resp.status}`; try{ msg=(await resp.json()).error||msg; }catch{} throw new Error(msg); }
     const reader=resp.body.getReader(), dec=new TextDecoder(); let buf="";
@@ -1999,12 +2462,12 @@ async function runAI(kind){
         const data=line.slice(5).trim(); if(data==="[DONE]") continue;
         try{ aiText+=JSON.parse(data).choices?.[0]?.delta?.content||""; }catch{}
       }
-      if(S.open===id) out.textContent=aiText||"正在想…";
+      if(S.open===id) out.textContent=aiText||t("正在想…");
     }
     if(S.open===id&&aiText) save.hidden=false;
   }catch(e){
     if(S.open!==id) return;
-    if(e.name!=="AbortError") note.textContent=e.message||"回答中断了，可以再试一次。";
+    if(e.name!=="AbortError") note.textContent=e.message||t("回答中断了，可以再试一次。");
     if(aiText) save.hidden=false; else out.hidden=true;
   }finally{ if(S.open===id){ stop.hidden=true; ask.disabled=chk.disabled=false; } aiCtl=null; }
 }
@@ -2016,12 +2479,13 @@ async function saveCfg(){
   const body={
     weights:weights(),
     categories:($("#cfg-cats").value||"").split(/[，,、\s]+/).map(s=>s.trim()).filter(Boolean),
-    preset:$("#cfg-preset")?.value||undefined, siteName:$("#cfg-site").value, field:$("#cfg-field").value, weatherCity:$("#cfg-city").value,
+    preset:$("#cfg-preset")?.value||undefined, lang:$("#cfg-lang")?.value||undefined, siteName:$("#cfg-site").value, field:$("#cfg-field").value, weatherCity:$("#cfg-city").value,
     interests:$("#cfg-int").value, dailyMinutes:+$("#cfg-min").value||60, top:+$("#cfg-top").value||12, tag:$("#cfg-tag").value, zoteroCollection:$("#cfg-zcol").value, diversity:+$("#cfg-div").value,
     newsFeeds:($("#cfg-feeds").value||"").split(/\s+/).map(s=>s.trim()).filter(Boolean),
   };
   try{ S.settings=await api("/api/config",{method:"PUT", body:JSON.stringify(body)}); S.wDraft=null;
-    if(S.site){ const p=presetOf(S.settings.preset); S.site.name=S.settings.siteName||p?.siteName||S.site.name; } toast("设置已保存，下一次推荐会按新设置生成"); render(); }
+    if(S.settings.lang && S.settings.lang!==LANG){ setUiLang(S.settings.lang); await loadAll(); }  // 方向名等跟着换语言
+    if(S.site){ const p=presetOf(S.settings.preset); S.site.name=S.settings.siteName||p?.siteName||S.site.name; } toast(t("设置已保存，下一次推荐会按新设置生成")); render(); }
   catch(e){ toast(e); }
   finally{ cfgSaving=false; }
 }
@@ -2029,7 +2493,7 @@ async function runJob(job, btn){
   btn.disabled=true;
   try{
     const st=await api(`/api/run/${job}`,{method:"POST"});
-    S.job=st; showJob(); watchJob(); toast("已开始生成，好了会自动显示");
+    S.job=st; showJob(); watchJob(); toast(t("已开始生成，好了会自动显示"));
   }
   catch(e){ toast(e); btn.disabled=false; }
 }
@@ -2041,22 +2505,22 @@ function failDismissed(at){ try{ return localStorage.getItem("fail-dismiss")===a
 function showJob(){
   const el=$("#jobbar"), j=S.job;
   if(!jobBusy(j)){
-    const last=j?.last, LB={daily:"今天的推荐", news:"业界简报", weekly:"本周回顾"};
+    const last=j?.last, LB={daily:t("今天的推荐"), news:t("业界简报"), weekly:t("本周回顾")};
     if(last && !last.ok && !failDismissed(last.at)){  // 上次生成失败：说清原因和办法，不只是一闪而过的提示
       el.className="jobbar hintbar failbar";
-      el.innerHTML=`<span style="flex:1 1 360px"><b>${esc(last.title||"没生成成功")}</b>　${esc(LB[last.kind]||"")}没生成成功${last.hint?`。${esc(last.hint)}`:"。"}
-        ${last.message?`<details><summary class="small">报错原文（${esc(fmtTime(last.at))}）</summary><code class="small">${esc(last.message)}</code></details>`:""}</span>
-        <span class="acts">${actBtns(last.actions||(last.kind?["retry:"+last.kind]:[]))}<button class="btn link" data-act="fail-dismiss">知道了</button></span>`;
+      el.innerHTML=`<span style="flex:1 1 360px"><b>${esc(last.title||t("没生成成功"))}</b>　${t("{x}没生成成功",{x:esc(LB[last.kind]||"")})}${last.hint?`${t("。")}${esc(last.hint)}`:t("。")}
+        ${last.message?`<details><summary class="small">${t("报错原文（{at}）",{at:esc(fmtTime(last.at))})}</summary><code class="small">${esc(last.message)}</code></details>`:""}</span>
+        <span class="acts">${actBtns(last.actions||(last.kind?["retry:"+last.kind]:[]))}<button class="btn link" data-act="fail-dismiss">${t("知道了")}</button></span>`;
       el.hidden=false; return;
     }
     el.className="jobbar"; el.hidden=true; return;
   }
   el.className="jobbar";
-  const LBL={daily:"今天的推荐", news:"业界简报", weekly:"本周回顾"};
+  const LBL={daily:t("今天的推荐"), news:t("业界简报"), weekly:t("本周回顾")};
   const now=j.label||LBL[(j.queue||[])[0]]||"";
   const next=(j.queue||[]).filter(k=>LBL[k]!==now).map(k=>LBL[k]);
-  const eta=j.minutes?`大约 ${j.minutes} 分钟`:"要几分钟";
-  el.innerHTML=`<span class="dot" aria-hidden="true"></span><span>正在生成${esc(now)}${next.length?`，之后是${esc(next.join("、"))}`:""}……${eta}，好了会自动显示，不用刷新。</span>`;
+  const eta=j.minutes?t("大约 {n} 分钟",{n:j.minutes}):t("要几分钟");
+  el.innerHTML=`<span class="dot" aria-hidden="true"></span><span>${t("正在生成{x}",{x:esc(now)})}${next.length?t("，之后是{y}",{y:esc(next.join(t("、")))}):""}${t("……{eta}，好了会自动显示，不用刷新。",{eta})}</span>`;
   el.hidden=false;
 }
 let jobTimer=null;
@@ -2069,7 +2533,7 @@ function watchJob(){
       clearInterval(jobTimer); jobTimer=null;
       await loadAll(); render();
       const last=j.last;
-      if(last && jobBusy(was) && last.ok) toast(`生成好了${last.message?`：${last.message}`:""}`);  // 失败的在上面的提示条里
+      if(last && jobBusy(was) && last.ok) toast(t("生成好了")+(last.message?t("：")+last.message:""));  // 失败的在上面的提示条里
       showJob();
     }catch{}
   }, isLocal() ? 4000 : 20000);
@@ -2078,16 +2542,16 @@ function watchJob(){
 /* ---------- 事件 ---------- */
 const smooth = () => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 document.addEventListener("click", e=>{
-  const t=e.target.closest("button,[data-close]"); if(!t) return;
-  const d=t.dataset;
+  const el=e.target.closest("button,[data-close]"); if(!el) return;
+  const d=el.dataset;
   if(d.tab){ if(S.open) closeReader(); S.tab=d.tab; history.replaceState(null,"","#"+S.tab); window.scrollTo(0,0); render(); return; }
   if(d.open){ openReader(d.open, d.focus); return; }
-  if(t.hasAttribute("data-close")){ closeReader(); return; }
+  if(el.hasAttribute("data-close")){ closeReader(); return; }
   if(d.nav){ navReader(+d.nav); return; }
   if(d.zoom){ openZoom(d.zoom); return; }
-  if(d.wx!==undefined){ openWxPop(t); return; }
-  if(d.wxpick){ wxPlace(JSON.parse(d.wxpick)); closeWxPop(); liveWeather(true); toast("天气地点已记住"); return; }
-  if(t.id==="wx-geo"){ wxPlace(null); closeWxPop(); liveWeather(true); toast("改回按你的位置显示天气"); return; }
+  if(d.wx!==undefined){ openWxPop(el); return; }
+  if(d.wxpick){ wxPlace(JSON.parse(d.wxpick)); closeWxPop(); liveWeather(true); toast(t("天气地点已记住")); return; }
+  if(el.id==="wx-geo"){ wxPlace(null); closeWxPop(); liveWeather(true); toast(t("改回按你的位置显示天气")); return; }
   if(d.abs&&S.open){ absLang=d.abs; const ab=$("#abs"); if(ab){ ab.outerHTML=absHtml(S.papers[S.open]); $("#abs").classList.add("in"); } return; }
   if(d.jump){ const el=document.getElementById(d.jump); if(el) window.scrollTo({top:el.getBoundingClientRect().top+scrollY-64, behavior:smooth()}); return; }
   if(d.day){ S.dayIdx=Math.max(0,Math.min(S.days.length-1,S.dayIdx+ +d.day)); render(); return; }
@@ -2095,10 +2559,10 @@ document.addEventListener("click", e=>{
   if(d.week){ S.weekIdx=Math.max(0,Math.min(S.weeks.length-1,S.weekIdx+ +d.week)); render(); return; }
   if(d.toggle){ setStatus(d.toggle, statusOf(d.toggle)==="done"?"todo":"done"); return; }
   if(d.setst){ setStatus(d.setst, d.v); return; }
-  if(d.skip){ setStatus(d.skip,"skip"); sendFeedback(d.skip,"skip",true); toast("已跳过，之后少推这类论文"); return; }
+  if(d.skip){ setStatus(d.skip,"skip"); sendFeedback(d.skip,"skip",true); toast(t("已跳过，之后少推这类论文")); return; }
   if(d.unskip){ setStatus(d.unskip,"todo"); sendFeedback(d.unskip,"clear",true); return; }
   if(d.zadd){ addZotero(d.zadd); return; }
-  if(d.status!==undefined&&t.closest(".filters")){ S.lib.status=d.status; S.lib.list=null; render(); return; }
+  if(d.status!==undefined&&el.closest(".filters")){ S.lib.status=d.status; S.lib.list=null; render(); return; }
   if(d.st&&S.open){ setStatus(S.open, d.st); return; }
   if(d.flag&&S.open){ const f=new Set(noteOf(S.open).flags||[]); f.has(d.flag)?f.delete(d.flag):f.add(d.flag); patchNote(S.open,{flags:[...f]}); refreshReader(); return; }
   if(d.fb&&S.open) return sendFeedback(S.open, d.fb);
@@ -2108,28 +2572,28 @@ document.addEventListener("click", e=>{
   if(d.upd==="go") return startUpdate();
   if(d.upd==="skip"){ try{ localStorage.setItem("upd-skip", S.update?.latest?.version||""); }catch{} return showUpdate(); }
   if(d.upd==="close"){ $("#updbar").hidden=true; return; }
-  if(d.upd==="check"){ api("/api/update?check=1").then(u=>{ S.update=u; render(); showUpdate(); toast(u.available?`有新版本 v${u.latest.version}`:"已经是最新版本"); }).catch(e=>toast(e)); return; }
-  if(d.run) return runJob(d.run, t);
-  if(t.id==="z-add") return addZotero();
-  if(t.id==="z-del") return removeZotero();
-  if(t.id==="lib-more") return loadLib(true);
-  if(t.id==="ai-ask") return runAI("ask");
-  if(t.id==="ai-check") return runAI("check");
-  if(t.id==="ai-stop"){ aiCtl?.abort(); return; }
-  if(t.id==="ai-save"&&S.open&&aiText){ const n=noteOf(S.open).note||""; const stamp=new Date().toISOString().slice(0,10);
-    const v=(n?n+"\n\n":"")+`[AI 解读 ${stamp}]\n`+aiText; patchNote(S.open,{note:v}); const ta=$("#note-ta"); if(ta) ta.value=v; $("#ai-save").hidden=true; toast("已存入笔记"); return; }
-  if(t.id==="cfg-save") return saveCfg();
+  if(d.upd==="check"){ api("/api/update?check=1").then(u=>{ S.update=u; render(); showUpdate(); toast(u.available?t("有新版本 v{v}",{v:u.latest.version}):t("已经是最新版本")); }).catch(e=>toast(e)); return; }
+  if(d.run) return runJob(d.run, el);
+  if(el.id==="z-add") return addZotero();
+  if(el.id==="z-del") return removeZotero();
+  if(el.id==="lib-more") return loadLib(true);
+  if(el.id==="ai-ask") return runAI("ask");
+  if(el.id==="ai-check") return runAI("check");
+  if(el.id==="ai-stop"){ aiCtl?.abort(); return; }
+  if(el.id==="ai-save"&&S.open&&aiText){ const n=noteOf(S.open).note||""; const stamp=new Date().toISOString().slice(0,10);
+    const v=(n?n+"\n\n":"")+`[${t("AI 解读")} ${stamp}]\n`+aiText; patchNote(S.open,{note:v}); const ta=$("#note-ta"); if(ta) ta.value=v; $("#ai-save").hidden=true; toast(t("已存入笔记")); return; }
+  if(el.id==="cfg-save") return saveCfg();
 });
 document.addEventListener("input", e=>{
-  const t=e.target;
-  if(t.id&&t.id.startsWith("su-")){ suDraft(); return; }
-  if(t.id==="note-ta"&&S.open){ patchNote(S.open,{note:t.value},900); return; }
-  if(t.id==="lib-q"){ S.lib.q=t.value; clearTimeout(libTimer); libTimer=setTimeout(()=>loadLib(),300); return; }
-  if(t.id==="cfg-boot"){ api("/api/autostart",{method:"PUT", body:JSON.stringify({on:t.checked})}).then(r=>{ S.autostart=r.on; toast(r.on?"开机后会自动在后台运行":"已关掉开机自动运行"); }).catch(e=>{ t.checked=!t.checked; toast(e); }); return; }
-  if(t.id==="cfg-auto"){ api("/api/config",{method:"PUT", body:JSON.stringify({autoUpdate:t.checked})}).then(s=>{ S.settings=s; if(S.update) S.update.auto=t.checked; toast(t.checked?"已打开自动更新":"已关掉自动更新"); }).catch(e=>toast(e)); return; }
-  if(t.id==="cfg-div"){ $("#cfg-div-v").textContent=(+t.value).toFixed(1); return; }
-  if(t.id?.startsWith("w-")){ const k=t.id.slice(2), w={...weights(), [k]:+t.value}; S.wDraft=w;
-    $("#wv-"+k).textContent=(+t.value).toFixed(2); $("#formula").textContent=formula(w); }
+  const el=e.target;
+  if(el.id&&el.id.startsWith("su-")){ suDraft(); return; }
+  if(el.id==="note-ta"&&S.open){ patchNote(S.open,{note:el.value},900); return; }
+  if(el.id==="lib-q"){ S.lib.q=el.value; clearTimeout(libTimer); libTimer=setTimeout(()=>loadLib(),300); return; }
+  if(el.id==="cfg-boot"){ api("/api/autostart",{method:"PUT", body:JSON.stringify({on:el.checked})}).then(r=>{ S.autostart=r.on; toast(r.on?t("开机后会自动在后台运行"):t("已关掉开机自动运行")); }).catch(e=>{ el.checked=!el.checked; toast(e); }); return; }
+  if(el.id==="cfg-auto"){ api("/api/config",{method:"PUT", body:JSON.stringify({autoUpdate:el.checked})}).then(s=>{ S.settings=s; if(S.update) S.update.auto=el.checked; toast(el.checked?t("已打开自动更新"):t("已关掉自动更新")); }).catch(e=>toast(e)); return; }
+  if(el.id==="cfg-div"){ $("#cfg-div-v").textContent=(+el.value).toFixed(1); return; }
+  if(el.id?.startsWith("w-")){ const k=el.id.slice(2), w={...weights(), [k]:+el.value}; S.wDraft=w;
+    $("#wv-"+k).textContent=(+el.value).toFixed(2); $("#formula").textContent=formula(w); }
 });
 document.addEventListener("keydown", e=>{
   const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||"");
@@ -2152,6 +2616,7 @@ document.addEventListener("keydown", e=>{
 new IntersectionObserver(([en])=>{ const sl=$("#slim"), on=!en.isIntersecting; sl.classList.toggle("on",on); sl.inert=!on; },{rootMargin:"-60px 0px 0px 0px"}).observe($("#mast"));
 
 /* ---------- 启动 ---------- */
+setUiLang(LANG);
 renderChrome();
 /* 第一次打开时提示收藏或安装成应用（关掉后不再出现）。浏览器不允许网页自己加收藏，只能提示 */
 let installEvt=null;
@@ -2161,10 +2626,10 @@ function showHint(){
   let off=false; try{ off=localStorage.getItem("hint-install")==="off"; }catch{}
   if(off || matchMedia("(display-mode: standalone)").matches || navigator.standalone){ el.hidden=true; return; }
   const ua=navigator.userAgent, ios=/iPhone|iPad|iPod/.test(ua), mobile=/Android|iPhone|iPad|iPod/.test(ua), mac=/Mac/.test(navigator.platform||ua);
-  const tip = ios ? "把它放到主屏幕：点 Safari 下面的分享按钮，再点“添加到主屏幕”。"
-    : mobile ? "把它放到主屏幕：点浏览器菜单里的“添加到主屏幕”或“安装应用”。"
-    : `收藏这个页面，以后一点就开：按 <kbd>${mac?"⌘":"Ctrl"}</kbd>+<kbd>D</kbd>。`+(installEvt?"也可以安装成一个单独的应用，在程序坞或开始菜单里打开。":"");
-  el.innerHTML=`<span>${tip}</span><span class="acts">${installEvt?`<button class="btn" id="hint-install">安装成应用</button>`:""}<button class="btn link" id="hint-close">知道了</button></span>`;
+  const tip = ios ? t("把它放到主屏幕：点 Safari 下面的分享按钮，再点“添加到主屏幕”。")
+    : mobile ? t("把它放到主屏幕：点浏览器菜单里的“添加到主屏幕”或“安装应用”。")
+    : t("收藏这个页面，以后一点就开：按 <kbd>{k}</kbd>+<kbd>D</kbd>。",{k:mac?"⌘":"Ctrl"})+(installEvt?t("也可以安装成一个单独的应用，在程序坞或开始菜单里打开。"):"");
+  el.innerHTML=`<span>${tip}</span><span class="acts">${installEvt?`<button class="btn" id="hint-install">${t("安装成应用")}</button>`:""}<button class="btn link" id="hint-close">${t("知道了")}</button></span>`;
   el.hidden=false;
   const inst=$("#hint-install");
   if(inst) inst.onclick=async()=>{ installEvt.prompt(); const r=await installEvt.userChoice; installEvt=null; if(r.outcome==="accepted") hideHint(); else showHint(); };
@@ -2178,6 +2643,7 @@ async function loadAll(){
     notes:b.notes||{}, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
     news:b.news||null, newsDates:b.newsDates||[], weather:S.weather?.live?S.weather:(b.weather||S.weather||null), site:b.site||null});
   if(b.news) S.newsCache[b.news.date]=b.news;
+  if(!needsSetup() && b.settings?.lang && b.settings.lang!==LANG){ setUiLang(b.settings.lang); }
 }
 (async()=>{
   try{ await loadAll(); showJob(); if(jobBusy(S.job)) watchJob(); showHint(); showUpdate(); if(["updating","restarting"].includes(S.update?.state)) watchUpdate(); }
