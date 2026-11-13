@@ -64,11 +64,11 @@ def _settings(store) -> dict[str, Any]:
     return repo.load_settings(store, settings_fallback_from_env())
 
 
-def make_runners(store, zotero: ZoteroLocalClient, max_results: int = 800) -> dict[str, Any]:
+def make_runners(store, zotero: ZoteroLocalClient) -> dict[str, Any]:
     """三个任务：每日推荐、业界简报、周报。每个返回一句结果。"""
 
     def daily(force: bool = False) -> str:
-        from ..cloud.daily import DailyDeps, run_daily
+        from ..cloud.daily import FETCH_LIMIT, DailyDeps, run_daily
         from ..ranking.embedder import default_embedder
         from ..signals import hf_upvotes
         from ..sources.arxiv_html import ArxivHtml
@@ -84,7 +84,7 @@ def make_runners(store, zotero: ZoteroLocalClient, max_results: int = 800) -> di
             embedder=default_embedder(
                 os.environ.get("ROBOT_TIMES_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
             ),
-            fetch_papers=lambda cats, days: fetch_recent(cats, days=days, max_results=max_results),
+            fetch_papers=lambda cats, days: fetch_recent(cats, days=days, max_results=FETCH_LIMIT),
             hf_upvotes=hf_upvotes,
             llm=llm_from_env(),
             html=ArxivHtml(),

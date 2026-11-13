@@ -60,6 +60,7 @@ def today_local(now: datetime | None = None) -> date:
 # arXiv 每天北京时间 8 点（美东夏令时）或 9 点（冬令时）发布前一天的提交，周末不发布，
 # 所以每次看最近 5 天的提交，再去掉以前已经看过的候选，既不漏也不重复。
 FETCH_DAYS = 5
+FETCH_LIMIT = 2500  # 一次最多抓多少篇；cs.RO 5 天约 700 篇，再加 cs.LG 这类大分类会远超 800
 SEEN_KEEP_DAYS = 14
 
 
@@ -189,6 +190,13 @@ def run_daily(deps: DailyDeps, settings: dict[str, Any], day: date | None = None
     fetched = deps.fetch_papers(settings.get("categories") or preset["categories"], FETCH_DAYS)
     papers = fresh_candidates(store, fetched, day)
     log.info("arXiv 最近 %d 天 %d 篇，其中新候选 %d 篇", FETCH_DAYS, len(fetched), len(papers))
+    if len(fetched) >= FETCH_LIMIT:  # 按提交时间倒序抓，到上限就停：更早几天的论文根本没进候选
+        oldest = min(p.published for p in fetched)
+        log.warning("arXiv 抓到上限 %d 篇，只覆盖到 %s", FETCH_LIMIT, oldest)
+        problems.append(
+            f"选的 arXiv 分类论文太多，抓到上限 {FETCH_LIMIT} 篇就停了，只看了 {oldest} 以后提交的；"
+            f"在设置里少选几个分类，就能看全最近 {FETCH_DAYS} 天"
+        )
     if not papers:
         # 节假日 arXiv 不发布：不生成空的一天，看板继续显示上一次的推荐
         log.info("没有新论文，今天不生成推荐")

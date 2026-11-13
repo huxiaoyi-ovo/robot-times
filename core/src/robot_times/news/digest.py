@@ -12,7 +12,7 @@ from typing import Any
 
 from ..cloud import repo
 from ..cloud.store import Store
-from ..llm.rerank import LLMClient, parse_json_array
+from ..llm.rerank import LLMClient, parse_json_array, parse_json_object
 from ..presets import get_preset
 from .fetch import fetch_all
 from .sources import custom_sources, sources_for
@@ -32,11 +32,19 @@ PROMPT = """他的研究兴趣：{interests}
   重要研究结果、政策监管、有见地的分析。招聘、活动预告、软文、教程、榜单凑数、重复报道一律 false。
 - category：从 {categories} 里选一个。
 - score：0–10，对他有多重要。9–10 是这个领域本周级别的大事；5 以下就不用放了。要拉开差距。
+  和他的研究兴趣直接相关的，比分量差不多的泛行业新闻（融资、上市、人事变动）高一两分。
 - title_zh：中文标题，不超过 26 字，像报纸标题一样点出主体和关键数字（例如“Figure 完成 10 亿美元融资，估值 390 亿”）。
 - summary：{summary_rule}只用摘录里有的事实，没有的数字不要编。
 - why：一句话（不超过 40 字），对他说为什么值得看；没有特别理由就写空字符串。
 
 只输出 JSON：{{"items": [{{"i": 序号, "keep": true, "category": "...", "score": 7, "title_zh": "...", "summary": "...", "why": "..."}}]}}
+
+{listing}
+"""
+EVENT_PROMPT = """下面是今天简报里的 {n} 条新闻（序号、标题）。找出报道同一件事的：同一次发布、同一笔融资、
+同一次上市的不同侧面（比如“启动 IPO”“拟募资多少”“创始人套现多少”）都算同一件事。
+
+只输出 JSON：{{"groups": [[序号, 序号], ...]}}，每组是同一件事的两条或更多；没有重复就输出 {{"groups": []}}。
 
 {listing}
 """
@@ -117,6 +125,25 @@ def _llm_batch(
                     "titleZh": str(r.get("title_zh") or it["title"])[:60],
                     "summary": str(r.get("summary") or ""), "why": str(r.get("why") or "")})  # fmt: skip
     return out
+
+
+def merge_events(llm: LLMClient | None, items: list[dict], errors: list[str]) -> list[dict]:
+    """同一件事的不同报道只留第一条（items 已按重要性排好）。标题去重挡不住“启动 IPO / 拟募资 / 创始人套现”这种。"""
+    if llm is None or len(items) < 2:
+        return items
+    listing = "\n".join(f"[{i}] {it['titleZh']}" for i, it in enumerate(items))
+    try:
+        data = parse_json_object(
+            llm.complete(EVENT_PROMPT.format(n=len(items), listing=listing), json_mode=True)
+        )
+    except Exception as e:  # 合并失败不影响简报，照原样放
+        errors.append(f"合并同一事件失败：{type(e).__name__} {str(e)[:120]}")
+        return items
+    drop: set[int] = set()
+    for group in data.get("groups") or []:
+        idx = sorted({int(i) for i in group if str(i).isdigit() and int(i) < len(items)})
+        drop.update(idx[1:])
+    return [it for i, it in enumerate(items) if i not in drop]
 
 
 def judge(
@@ -201,7 +228,8 @@ def run_news(
     picked_deep = [
         it for it in judge(llm, deep, "deep", interests, errors, preset) if it["score"] >= 5
     ]
-    picked_news = dedupe(sorted(picked_news, key=_sort_key), key="titleZh")[:MAX_NEWS]
+    picked_news = dedupe(sorted(picked_news, key=_sort_key), key="titleZh")
+    picked_news = merge_events(llm, picked_news[: MAX_NEWS * 2], errors)[:MAX_NEWS]
     picked_deep = sorted(picked_deep, key=_sort_key)[:MAX_DEEP]
 
     def public(it: dict) -> dict:  # 不存原文摘录，只存链接和我们自己写的摘要

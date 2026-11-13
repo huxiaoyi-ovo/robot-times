@@ -73,7 +73,7 @@ ok "uv $(uv --version | awk '{print $2}')"
 say "2/5 安装依赖（第一次要一两分钟）"
 extra=""
 if ! uv run --no-sync python -c "import sentence_transformers" >/dev/null 2>&1; then
-  ans="$(ask '要装更准的向量模型吗？推荐更准，但要下载 1–2 GB（PyTorch）。[y/N] ')"
+  ans="$(ask '要改用 PyTorch 版的向量模型吗？默认的轻量版已经够用，这个要多下载 1–2 GB。[y/N] ')"
   case "$ans" in [yY]*) extra="--extra embed" ;; esac
 else
   extra="--extra embed"

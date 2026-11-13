@@ -403,3 +403,12 @@ def test_zotero_closed_does_not_block_retry_for_hours():
     state["open"] = True
     jobs.start("daily", force=False)
     assert jobs.status()["last"]["ok"]
+
+
+def test_note_html_keeps_review_paragraphs():
+    # 解读分三段时，Zotero 笔记里每段一个 <p>；只有一段时和以前一样
+    from robot_times.local.api import note_html
+
+    three = note_html({"analysis": {"review": "做了什么：A\n\n判断：B\n\n对你：C"}})
+    assert "<p><b>解读：</b>做了什么：A</p><p>判断：B</p><p>对你：C</p>" in three
+    assert "<p><b>解读：</b>一段</p>" in note_html({"analysis": {"review": "一段"}})

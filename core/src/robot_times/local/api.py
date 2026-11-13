@@ -109,8 +109,12 @@ def note_html(p: dict[str, Any], my_note: str = "") -> str:
     parts = ["<h2>The Robot Times 摘要</h2>"]
     if p.get("titleZh"):
         parts.append(f"<p><b>{e(p['titleZh'])}</b></p>")
-    if (p.get("analysis") or {}).get("review"):
-        parts.append(f"<p><b>解读：</b>{e(p['analysis']['review'])}</p>")
+    review = [x.strip() for x in str((p.get("analysis") or {}).get("review") or "").splitlines()]
+    review = [x for x in review if x]
+    if review:  # 解读分了段（做了什么 / 判断 / 对你）：每段一个 <p>，不然换行在笔记里会被吞掉
+        parts.append(
+            f"<p><b>解读：</b>{e(review[0])}</p>" + "".join(f"<p>{e(x)}</p>" for x in review[1:])
+        )
     if p.get("summary"):
         parts.append(f"<p>{e(p['summary'])}</p>")
     if p.get("why"):

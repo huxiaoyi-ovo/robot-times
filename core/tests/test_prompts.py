@@ -102,13 +102,15 @@ def test_rerank_gets_library_neighbours_and_returns_tip():
     cands = [
         Paper(id="2610.00001", title="Humanoid motion imitation from video",
               abstract="humanoid whole-body motion imitation", authors=[], published=date(2026, 10, 24),
-              comment="Accepted to CoRL 2026"),
+              comment="Accepted to CoRL 2026", venue="IEEE RA-L 11(3), 2026"),
     ]  # fmt: skip
     llm = RecordingLLM()
     out = recommend(cands, library, HashingEmbedder(), llm=llm, interests="人形")
     prompt = llm.prompts[0]
     assert "他库里最接近的：《SuperMimic humanoid motion imitation》" in prompt
     assert "作者备注：Accepted to CoRL 2026" in prompt
+    assert "发表：IEEE RA-L 11(3), 2026" in prompt
+    assert "一批里通常最多" not in prompt  # 分数是绝对标准，不按批次配额
     assert out[0].tip_zh == "先看 Fig. 2"
     assert out[0].related[0] == "SuperMimic humanoid motion imitation"
 

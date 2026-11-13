@@ -243,7 +243,7 @@ def _logging(log_file: str = "") -> None:
 @cloud.command("daily")
 def cloud_daily(
     day: str = typer.Option("", help="按哪一天生成（YYYY-MM-DD），默认今天（北京时间）"),
-    max_results: int = typer.Option(800, help="最多从 arXiv 拉多少篇"),
+    max_results: int = typer.Option(2500, help="最多从 arXiv 拉多少篇（和 FETCH_LIMIT 一致）"),
     if_missing: bool = typer.Option(
         False, help="今天 arXiv 发布之后已经生成过就跳过（备用的定时任务用，避免换掉正在读的推荐）"
     ),

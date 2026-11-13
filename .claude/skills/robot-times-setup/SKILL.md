@@ -196,7 +196,7 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8765/api/resta
 ```bash
 uv --version || curl -LsSf https://astral.sh/uv/install.sh | sh          # Windows：powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 git clone --depth 1 https://github.com/huxiaoyi-ovo/robot-times.git ~/robot-times && cd ~/robot-times
-uv sync --frozen                                                         # 想要更准的推荐：加 --extra embed（1–2 GB）
+uv sync --frozen                                                         # 默认用轻量向量模型（fastembed）；--extra embed 改用 PyTorch 版（多 1–2 GB）
 uv run robot-times local autostart                                       # 开机自动启动，并现在就在后台启动看板
 ```
 

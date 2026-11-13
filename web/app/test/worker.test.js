@@ -99,6 +99,8 @@ test("Zotero 条目格式和 Python 版一致", () => {
   assert.match(html, /&lt;x&gt;/);
   assert.match(html, /综合分 7\.3/);
   assert.match(html, /<h2>我的笔记<\/h2><p>第一段<\/p><p>第二段<\/p>/);
+  const split = noteHtml({ ...p, analysis: { review: "做了什么：A\n\n判断：B\n\n对你：C" } }, "");
+  assert.match(split, /<p><b>解读：<\/b>做了什么：A<\/p><p>判断：B<\/p><p>对你：C<\/p>/);
 });
 
 test("入口文件只导出函数（Workers 运行时不接受其他类型的导出）", async () => {

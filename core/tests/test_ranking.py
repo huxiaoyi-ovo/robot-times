@@ -94,3 +94,55 @@ def test_arxiv_ids_found_in_library():
         lib_item("c", url="https://example.com/2610.99999"),
     ]
     assert arxiv_ids_in_library(items) == {"2610.31608", "2602.16511"}
+
+
+def test_llm_judged_papers_are_not_pushed_out_by_unjudged(monkeypatch):
+    # 大模型只审前 LLM_CANDIDATES 篇；它老实打了低分时，没审过的论文不能靠向量百分位分挤进来
+    import json
+    import re
+
+    import httpx
+
+    from robot_times import pipeline
+    from robot_times.llm.rerank import LLMClient
+
+    def handler(request):
+        prompt = json.loads(request.content)["messages"][-1]["content"]
+        ids = re.findall(r"^\[(\d{4}\.\d{5})\]", prompt, re.M)
+        reply = json.dumps({"papers": [{"id": i, "score": 3, "summary_zh": "s"} for i in ids]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": reply}}]})
+
+    monkeypatch.setattr(pipeline, "LLM_CANDIDATES", 2)
+    llm = LLMClient("https://llm.example/v1", "k", "m", transport=httpx.MockTransport(handler))
+    cands = [
+        paper("2610.00001", "Humanoid whole-body control", "humanoid robot motion imitation"),
+        paper("2610.00002", "Hexapod gait on rough terrain", "six-legged robot gait"),
+        paper("2610.00003", "World model for control", "latent world model robot"),
+        paper("2610.00004", "Protein folding", "diffusion for proteins"),
+        paper("2610.00005", "Math reasoning", "chain of thought"),
+    ]
+    out = recommend(cands, LIBRARY, HashingEmbedder(), llm=llm, limit=2, now=NOW)
+    assert len(out) == 2
+    assert all(sp.llm_score is not None for sp in out)
+
+
+def test_default_embedder_falls_back_in_order(monkeypatch):
+    # 装了 sentence-transformers 用它；没装用 fastembed；模型加载失败（比如下载不了）退回词袋，当天照样出推荐
+    import warnings
+
+    from robot_times.ranking import embedder as emb
+
+    def missing(name):
+        raise ImportError(name)
+
+    def offline(name):
+        raise OSError("连不上 Hugging Face")
+
+    monkeypatch.setattr(emb, "SentenceTransformerEmbedder", missing)
+    monkeypatch.setattr(emb, "FastEmbedEmbedder", lambda name: HashingEmbedder(dim=8))
+    assert emb.default_embedder().dim == 8
+    monkeypatch.setattr(emb, "FastEmbedEmbedder", offline)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        assert isinstance(emb.default_embedder(), HashingEmbedder)
+    assert "连不上" in str(w[0].message)
