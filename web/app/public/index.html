@@ -1551,7 +1551,7 @@ function pkgItem(p, mode){
       <h3 class="ht">${titleBtn(p)}</h3>
       ${zhSub(p)}
       ${p.summary?`<p class="isum">${esc(p.summary)}</p>`:""}
-      <div class="pi-foot">${checkBtn(p.id)}${mline(`${MODES[mode]?modeName(mode):t("看摘要")} · ${t("{n} 分钟",{n:MIN_OF[p.tier]||5})}`)}${stamps(p.id)}</div>
+      <div class="pi-foot">${checkBtn(p.id)}${mline(`${MODES[mode]?modeName(mode):t("看摘要")} ${t("{n} 分钟",{n:MIN_OF[p.tier]||5})}`)}${stamps(p.id)}</div>
     </div>
     ${coverBtn(p,"pthumb",true)}
   </article>`;
