@@ -160,3 +160,27 @@ test("方向预设：报名和“问 AI”的人设跟着设置走，个人化�
   assert.match(s, /做计算机视觉的资深研究者/);
   assert.doesNotMatch(s, /[{}]/);
 });
+
+test("英文版：报错跟着 X-Lang，笔记、问 AI 和方向名跟着设置里的 lang", async () => {
+  const off = await call({ "x-lang": "en" }, { DB: db });
+  assert.match((await off.json()).error, /^Login protection isn't on yet/);
+  const zh = await call({}, { DB: db });
+  assert.match((await zh.json()).error, /^看板还没开启登录保护/);
+
+  const { askPrompt, siteInfo } = await import("../src/index.js");
+  const { presetFor, styleFor } = await import("../src/presets.js");
+  const p = { title: "T", authors: ["A"], abstract: "Abs", summary: "S", related: ["R"], analysis: { review: "What it does: x\nVerdict: y" }, scores: { total: 7 } };
+  const en = noteHtml(p, "mine", "en");
+  assert.match(en, /The Robot Times summary/);
+  assert.match(en, /My notes/);
+  assert.doesNotMatch(en, /[一-鿿]/);
+  assert.match(noteHtml(p, ""), /摘要/); // 不传就是中文
+  const q = askPrompt(p, "", "ask", "", "", "", "en");
+  assert.match(q, /Their question/);
+  assert.doesNotMatch(q, /[一-鿿]/);
+  assert.doesNotMatch(askPrompt(p, "", "check", "", "", "n", "en"), /[一-鿿]/);
+  assert.equal(siteInfo({ lang: "en" }).presets[0].label, "Robotics & embodied AI");
+  const style = styleFor(presetFor({ lang: "en", preset: "general" }));
+  assert.match(style, /Write in English/);
+  assert.doesNotMatch(style, /[一-鿿{}]/);
+});
