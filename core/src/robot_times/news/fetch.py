@@ -260,6 +260,16 @@ def _hn(http: httpx.Client, src: dict, since: datetime) -> list[dict]:
     return out
 
 
+def _is_web(url: Any) -> bool:
+    """只认 http / https 的链接。订阅里偶尔混进 javascript:、data:、mailto: 之类，看板上不该做成可点的链接。"""
+    return isinstance(url, str) and urlsplit(url.strip()).scheme.lower() in ("http", "https")
+
+
+def _web_links(it: dict) -> dict:
+    """配图和讨论链接不是网页地址的就去掉，条目本身保留。"""
+    return {k: v for k, v in it.items() if k not in ("image", "discussion") or _is_web(v)}
+
+
 def fetch_all(
     sources: list[dict],
     now: datetime | None = None,
@@ -295,9 +305,10 @@ def fetch_all(
                 else:
                     raise ValueError(f"不认识的来源类型 {src['kind']}")
                 fresh = [
-                    it
+                    _web_links(it)
                     for it in got
-                    if not it["published"] or datetime.fromisoformat(it["published"]) >= since
+                    if _is_web(it["url"])
+                    and (not it["published"] or datetime.fromisoformat(it["published"]) >= since)
                 ]
                 items.extend(fresh)
                 health.append(
