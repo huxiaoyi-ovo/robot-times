@@ -136,3 +136,21 @@ def test_other_errors_are_not_retried():
 
     with pytest.raises(ValueError):
         fetch_recent(["cs.RO"], sleep=lambda s: None, api=api)
+
+
+def test_rss_fallback_respects_fetch_limit():
+    import httpx
+
+    def api(*a, **k):
+        raise Throttled("Page request resulted in HTTP 429")
+
+    feed = RSS.replace(
+        "</channel>",
+        """<item><title>Another new paper</title><link>https://arxiv.org/abs/2610.33001</link>
+        <arxiv:announce_type>new</arxiv:announce_type></item></channel>""",
+    )
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, text=feed))
+    with httpx.Client(transport=transport) as http:
+        papers = fetch_recent(["cs.RO"], max_results=1, sleep=lambda s: None, api=api, http=http)
+
+    assert [p.id for p in papers] == ["2610.33172"]

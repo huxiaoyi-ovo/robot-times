@@ -76,7 +76,7 @@ def fetch_recent(
                 raise
             last = e
     log.warning("arXiv API 一直限流（%s），改用 RSS 抓今天发布的新论文", last)
-    return fetch_rss(categories, http=http)
+    return fetch_rss(categories, http=http)[:max_results]
 
 
 def _throttled(e: Exception) -> bool:
