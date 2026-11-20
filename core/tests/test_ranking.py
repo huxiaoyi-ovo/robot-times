@@ -71,6 +71,12 @@ def test_known_ids_are_skipped():
     assert recommend(cands, LIBRARY, HashingEmbedder(), known_ids={"2610.00002"}, now=NOW) == []
 
 
+def test_recommend_accepts_zotero_dates_without_timezone_suffix():
+    cands = [paper("2610.00002", "Humanoid", "humanoid robot")]
+    library = [lib_item("Humanoid control", dateAdded="2026-10-15 00:00:00")]
+    assert recommend(cands, library, HashingEmbedder(), now=NOW)[0].paper == cands[0]
+
+
 def test_recency_weights_halve_each_half_life():
     w = recency_weights([NOW, NOW - timedelta(days=180), None], NOW, half_life_days=180)
     assert np.allclose(w[:2], [1.0, 0.5])
