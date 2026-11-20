@@ -193,9 +193,12 @@ class Jobs:
                 result.update(ok=False, message=f"{type(e).__name__}: {str(e)[:300]}")
             finally:
                 if not waiting:
-                    tried = repo.get_json(self.store, "local_runs") or {}
-                    tried[kind] = self.clock().isoformat(timespec="seconds")
-                    repo.set_json(self.store, "local_runs", tried)
+                    try:
+                        tried = repo.get_json(self.store, "local_runs") or {}
+                        tried[kind] = self.clock().isoformat(timespec="seconds")
+                        repo.set_json(self.store, "local_runs", tried)
+                    except Exception:
+                        log.exception("记录任务重试时间失败")
             result["at"] = self.clock().isoformat(timespec="seconds")
             if not result["ok"]:  # 看板上显示原因和办法
                 from .diagnose import explain
