@@ -395,23 +395,35 @@ def test_stop_shuts_down_the_dashboard(server):
 
 
 def test_scheduler_generates_in_background_only_after_setup():
-    import time
-
     from robot_times.local.jobs import scheduler
 
     calls = []
+    setup_done = threading.Event()
+    checked_before_setup = threading.Event()
+    generated_twice = threading.Event()
+    readiness_checks = 0
+
+    def ready():
+        nonlocal readiness_checks
+        if setup_done.is_set():
+            return not generated_twice.is_set()
+        readiness_checks += 1
+        if readiness_checks == 2:
+            checked_before_setup.set()
+        return False
 
     class J:
         def auto(self):
             calls.append(1)
+            if len(calls) == 2:
+                generated_twice.set()
 
-    ready = {"v": False}
-    scheduler(J(), lambda: ready["v"], every=0.05, first=0)
-    time.sleep(0.2)
+    scheduler(J(), ready, every=0.05, first=0)
+    assert checked_before_setup.wait(timeout=5)
     assert calls == []  # 设置引导没做完
-    ready["v"] = True
-    time.sleep(0.2)
-    assert len(calls) >= 2
+    setup_done.set()
+    assert generated_twice.wait(timeout=5)
+    assert len(calls) == 2
 
 
 def test_zotero_closed_does_not_block_retry_for_hours():
