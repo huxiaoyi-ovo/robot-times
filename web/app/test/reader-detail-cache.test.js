@@ -80,3 +80,24 @@ test("摘要请求还没结束时发现新解读，之后补取且保留新标�
   assert.equal(reader.S.papers.p.title, "Latest title");
   assert.equal(reader.updates.at(-1).analysis.review, "解读");
 });
+
+test("详情载入失败后，重新渲染不会反复请求，重新打开才重试", async () => {
+  let requests = 0;
+  const reader = pageWithReader(() => {
+    requests++;
+    return requests === 1 ? Promise.reject(new Error("offline")) : Promise.resolve({id:"p", abstractZh:"摘要"});
+  });
+  reader.open();
+  await settle();
+  assert.equal(requests, 1);
+
+  reader.render();
+  reader.render();
+  await settle();
+  assert.equal(requests, 1);
+
+  reader.open();
+  await settle();
+  assert.equal(requests, 2);
+  assert.equal(reader.updates.at(-1).abstractZh, "摘要");
+});
