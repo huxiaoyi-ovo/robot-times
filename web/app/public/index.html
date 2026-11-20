@@ -2658,9 +2658,15 @@ function showHint(){
 function hideHint(){ try{ localStorage.setItem("hint-install","off"); }catch{} $("#hintbar").hidden=true; }
 
 async function loadAll(){
+  const notesAtStart={...S.notes};
   const b=await api("/api/bootstrap");
+  const notes={...b.notes};
+  // 刷新期间编辑或保存的笔记比这次快照新。
+  for(const [id,note] of Object.entries(S.notes)){
+    if(pending[id]||note!==notesAtStart[id]) notes[id]=note;
+  }
   Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, autostart:b.autostart??null, setup:(S.setup?.reopened && !S.setup.done) ? S.setup : (b.setup||null), settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
-    notes:b.notes||{}, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
+    notes, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
     news:b.news||null, newsDates:b.newsDates||[], weather:S.weather?.live?S.weather:(b.weather||S.weather||null), site:b.site||null});
   if(b.news) S.newsCache[b.news.date]=b.news;
   if(!needsSetup() && b.settings?.lang && b.settings.lang!==LANG){ setUiLang(b.settings.lang); }
