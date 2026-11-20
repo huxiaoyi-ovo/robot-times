@@ -632,18 +632,29 @@ class LocalApi:
         """下载 arXiv 的 PDF，存进本机 Zotero。返回失败原因，成功返回 None。"""
         if not p.get("pdf"):
             return L("这篇没有 PDF 地址", "this paper has no PDF link")
+        too_big = L("PDF 超过 40 MB，没有存", "the PDF is over 40 MB, not saved")
         try:
-            r = self.http.get(p["pdf"], headers={"User-Agent": PDF_UA, "Accept": "application/pdf"})
+            # 边下边数：超过上限马上停，不把整个大文件先读进内存
+            with self.http.stream(
+                "GET", p["pdf"], headers={"User-Agent": PDF_UA, "Accept": "application/pdf"}
+            ) as r:
+                if r.status_code != 200:
+                    return L("下载 PDF 失败（HTTP {}）", "PDF download failed (HTTP {})").format(
+                        r.status_code
+                    )
+                if "pdf" not in r.headers.get("content-type", "").lower():
+                    return L("下载到的不是 PDF", "the download wasn't a PDF")
+                declared = r.headers.get("content-length", "")
+                if declared.isdigit() and int(declared) > MAX_PDF:
+                    return too_big
+                data = bytearray()
+                for chunk in r.iter_bytes():
+                    data += chunk
+                    if len(data) > MAX_PDF:
+                        return too_big
         except httpx.HTTPError as e:
             return L("下载 PDF 失败（{}）", "PDF download failed ({})").format(type(e).__name__)
-        if r.status_code != 200:
-            return L("下载 PDF 失败（HTTP {}）", "PDF download failed (HTTP {})").format(
-                r.status_code
-            )
-        if "pdf" not in r.headers.get("content-type", "").lower():
-            return L("下载到的不是 PDF", "the download wasn't a PDF")
-        if len(r.content) > MAX_PDF:
-            return L("PDF 超过 40 MB，没有存", "the PDF is over 40 MB, not saved")
+        content = bytes(data)
         filename = re.sub(r"[^\w.-]+", "_", str(p["id"])) + ".pdf"
         try:
             att = z.create_items(
@@ -662,7 +673,7 @@ class LocalApi:
                     }
                 ]
             )[0]
-            z.upload_file(att, r.content, filename)
+            z.upload_file(att, content, filename)
         except ZoteroError as e:
             return str(e)
         return None

@@ -496,6 +496,30 @@ def test_note_html_keeps_review_paragraphs():
     assert "<p><b>解读：</b>一段</p>" in note_html({"analysis": {"review": "一段"}})
 
 
+def test_oversized_pdf_is_not_downloaded_whole(monkeypatch):
+    from robot_times.local import api as local_api
+
+    monkeypatch.setattr(local_api, "MAX_PDF", 1000)
+    sent = []
+
+    def body():  # 没有 Content-Length、不停往下传的 PDF
+        for _ in range(100):
+            sent.append(1)
+            yield b"%" * 100
+
+    for response in (
+        lambda r: httpx.Response(200, content=b"x", headers={"content-type": "application/pdf",
+                                                            "content-length": "5000"}),
+        lambda r: httpx.Response(200, content=body(), headers={"content-type": "application/pdf"}),
+    ):  # fmt: skip
+        api, z = make_api()
+        api.http = httpx.Client(transport=httpx.MockTransport(response))
+        paper(api.store)
+        status, r = call(api, "POST", "/api/zotero/2610.00001")
+        assert status == 200 and "40 MB" in r["pdfError"] and not z.uploaded
+    assert len(sent) <= 11  # 超过上限就停，没有把 100 块都读完
+
+
 def test_server_rejects_bad_or_oversized_content_length(server):
     import http.client
 
