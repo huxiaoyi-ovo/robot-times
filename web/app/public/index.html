@@ -2270,7 +2270,7 @@ function articleHtml(id){
     <div id="analysis" style="display:contents">${analysisHtml(p)}</div>
     ${(p.related||[]).length?`<section class="sec rv"><h2>${t("你库里相近的")}</h2><ul class="related">${p.related.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></section>`:""}
     <section class="notebox rv" id="note-sec">
-      <div style="display:flex;align-items:baseline;gap:12px"><h2>${t("我的笔记")}</h2><span class="saved" id="saved"></span></div>
+      <div style="display:flex;align-items:baseline;gap:12px"><h2>${t("我的笔记")}</h2><span class="saved" id="saved">${pending[id]?t("保存中…"):""}</span></div>
       <div class="seg" id="seg" role="group" aria-label="${t("阅读状态")}">${STATUS.map(([k,l])=>`<button data-st="${k}" aria-pressed="${(n.status||"todo")===k}">${t(l)}</button>`).join("")}</div>
       <div class="flags" id="flags">${FLAGS.map(f=>`<button class="flag" data-flag="${esc(f)}" aria-pressed="${(n.flags||[]).includes(f)}">${esc(t(f))}</button>`).join("")}</div>
       <textarea id="note-ta" rows="7" aria-label="${t("笔记")}" placeholder="${t("用自己的话写 3 到 5 句：&#10;问题：&#10;核心 idea：&#10;关键结果：&#10;我的看法 / 和 X 的区别：")}">${esc(n.note||"")}</textarea>
@@ -2404,16 +2404,23 @@ function refreshReader(){
 const pending={}, chain={}, timers={};
 function patchNote(id, patch, delay){
   S.notes={...S.notes,[id]:{status:"todo",note:"",flags:[],...noteOf(id), ...patch, paperId:id, updatedAt:new Date().toISOString()}};
-  pending[id]=true; const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("保存中…");
+  pending[id]=Symbol(); const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("保存中…");
   clearTimeout(timers[id]);
   timers[id]=setTimeout(()=>flush(id), delay||0);
 }
 function flush(id){
+  const edit=pending[id]; if(!edit) return;
   const n=S.notes[id], body=JSON.stringify({status:n.status, note:n.note, flags:n.flags});
   chain[id]=(chain[id]||Promise.resolve()).then(()=>api(`/api/notes/${encodeURIComponent(id)}`,{method:"PUT", body})).then(saved=>{
-    pending[id]=false; S.notes[id]={...S.notes[id], updatedAt:saved.updatedAt};
+    if(pending[id]!==edit) return;
+    delete pending[id]; S.notes[id]={...S.notes[id], updatedAt:saved.updatedAt};
     const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("已保存");
-  }).catch(e=>{ pending[id]=false; const sv=$("#saved"); if(sv) sv.textContent=t("没保存上"); toast(e); });
+  }).catch(e=>{
+    if(pending[id]!==edit) return;
+    delete pending[id];
+    const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("没保存上");
+    toast(e);
+  });
 }
 window.addEventListener("beforeunload", e=>{ if(Object.values(pending).some(Boolean)){ e.preventDefault(); e.returnValue=""; } });
 
