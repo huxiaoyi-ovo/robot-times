@@ -191,14 +191,19 @@ def merge_events(
                 **({"system": style_for(get_preset({"lang": "en"}))} if lang == "en" else {}),
             )
         )
+        groups = data.get("groups", [])
+        if not isinstance(groups, list) or any(not isinstance(group, list) for group in groups):
+            raise ValueError(
+                "Expected an array of groups" if lang == "en" else "事件分组应为二维数组"
+            )
+        drop: set[int] = set()
+        for group in groups:
+            idx = sorted({int(i) for i in group if str(i).isdecimal() and int(i) < len(items)})
+            drop.update(idx[1:])
     except Exception as e:  # 合并失败不影响简报，照原样放
         head = "Merging duplicate events failed" if lang == "en" else "合并同一事件失败"
         errors.append(f"{head}{': ' if lang == 'en' else '：'}{type(e).__name__} {str(e)[:120]}")
         return items
-    drop: set[int] = set()
-    for group in data.get("groups") or []:
-        idx = sorted({int(i) for i in group if str(i).isdigit() and int(i) < len(items)})
-        drop.update(idx[1:])
     return [it for i, it in enumerate(items) if i not in drop]
 
 

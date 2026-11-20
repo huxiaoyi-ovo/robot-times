@@ -228,3 +228,21 @@ def test_merge_events_keeps_first_report_of_each_event():
 
     assert merge_events(Broken(), items, errors) == items  # 合并失败就照原样放
     assert errors and "合并同一事件失败" in errors[0]
+
+
+def test_merge_events_keeps_reports_if_grouping_has_the_wrong_shape():
+    from robot_times.news.digest import merge_events
+
+    items = [{"titleZh": "First report"}, {"titleZh": "Second report"}]
+
+    class MalformedGroups:
+        def __init__(self, groups):
+            self.groups = groups
+
+        def complete(self, prompt, **kw):
+            return json.dumps({"groups": self.groups})
+
+    for groups in ([[0, 1], None], [[0, 1], "01"], {"first": [0, 1]}):
+        errors = []
+        assert merge_events(MalformedGroups(groups), items, errors, lang="en") == items
+        assert len(errors) == 1 and "Merging duplicate events failed" in errors[0]
