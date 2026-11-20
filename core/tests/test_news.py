@@ -314,3 +314,23 @@ def test_merge_events_keeps_reports_if_grouping_has_the_wrong_shape():
         errors = []
         assert merge_events(MalformedGroups(groups), items, errors, lang="en") == items
         assert len(errors) == 1 and "Merging duplicate events failed" in errors[0]
+
+
+def test_only_web_links_reach_the_brief():
+    feed = """<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>
+<item><title>Script link story here</title><link>javascript:alert(1)</link>
+<pubDate>Sun, 25 Oct 2026 15:00:00 GMT</pubDate></item>
+<item><title>Mail link story here</title><link>mailto:someone@example.com</link>
+<pubDate>Sun, 25 Oct 2026 15:00:00 GMT</pubDate></item>
+<item><title>Normal story with odd image</title><link>https://ok.ex/a</link>
+<pubDate>Sun, 25 Oct 2026 15:00:00 GMT</pubDate>
+<description>&lt;img src="javascript:alert(2)"&gt;text</description></item>
+</channel></rss>"""
+    src = [
+        {"id": "odd", "name": "Odd", "kind": "rss", "type": "news", "url": "https://odd.ex/feed"}
+    ]
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, text=feed))
+    items, health = fetch_all(src, now=NOW, transport=transport)
+    assert [it["url"] for it in items] == ["https://ok.ex/a"]
+    assert "image" not in items[0]
+    assert health[0]["ok"] and health[0]["count"] == 1
