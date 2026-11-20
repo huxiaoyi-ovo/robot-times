@@ -5,6 +5,7 @@ import re
 import threading
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl
@@ -280,6 +281,27 @@ def test_jobs_run_in_order_and_record_failures():
     assert seen[-1] == ("daily", True)
     with pytest.raises(ValueError):
         jobs.start("nope")
+
+
+def test_concurrent_starts_only_queue_one_job(monkeypatch):
+    jobs = Jobs(SqliteStore(), {"news": lambda force: ""}, background=False)
+    barrier = threading.Barrier(2)
+    enqueue = jobs._enqueue
+
+    def overlapping_enqueue(kind, force):
+        barrier.wait(timeout=5)
+        enqueue(kind, force)
+
+    # 保留队列，确定两次请求都已尝试入队后再检查。
+    monkeypatch.setattr(jobs, "_drain", lambda: None)
+    monkeypatch.setattr(jobs, "_enqueue", overlapping_enqueue)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(jobs.start, "news")
+        second = pool.submit(jobs.start, "news")
+        first.result(timeout=5)
+        second.result(timeout=5)
+
+    assert jobs.status()["queue"] == ["news"]
 
 
 @pytest.fixture

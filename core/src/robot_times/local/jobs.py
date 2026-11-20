@@ -147,14 +147,13 @@ class Jobs:
         """看板上点“现在生成”。"""
         if kind not in self.runners:
             raise ValueError(kind)
-        with self._lock:
-            busy = kind == self._current or any(k == kind for k, _ in self._queue)
-        if not busy:
-            self._enqueue(kind, force)
+        self._enqueue(kind, force)
         return self.status()
 
     def _enqueue(self, kind: str, force: bool) -> None:
         with self._lock:
+            if kind == self._current or any(k == kind for k, _ in self._queue):
+                return
             self._queue.append((kind, force))
             if self._current is not None:
                 return
