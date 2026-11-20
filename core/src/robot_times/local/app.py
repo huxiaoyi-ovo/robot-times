@@ -23,9 +23,9 @@ from ..cloud.env import DEEPSEEK_BASE, DEEPSEEK_MODEL, llm_from_env, settings_fa
 from ..cloud.store import SqliteStore
 from ..config import CONFIG_DIR
 from ..i18n import L
-from ..zotero.local_api import ZoteroLocalClient
+from ..zotero.local_api import ZoteroLibraryUnavailable, ZoteroLocalClient
 from .api import LocalApi, stream_chat
-from .jobs import Jobs, weekly_target
+from .jobs import Jobs, WaitForZotero, weekly_target
 
 log = logging.getLogger("robot_times.local")
 
@@ -75,15 +75,12 @@ def make_runners(store, zotero: ZoteroLocalClient) -> dict[str, Any]:
         from ..sources.arxiv_html import ArxivHtml
         from ..sources.arxiv_source import fetch_recent
 
+        waiting_message = L(
+            "连不上 Zotero：打开 Zotero 后会自动接着生成，也可以点“重试”。",
+            "Can't reach Zotero: it will carry on once Zotero is open, or click “Retry”.",
+        )
         if not zotero.ping():
-            from .jobs import WaitForZotero
-
-            raise WaitForZotero(
-                L(
-                    "连不上 Zotero：打开 Zotero 后会自动接着生成，也可以点“重试”。",
-                    "Can't reach Zotero: it will carry on once Zotero is open, or click “Retry”.",
-                )
-            )
+            raise WaitForZotero(waiting_message)
         deps = DailyDeps(
             store=store,
             zotero=zotero,
@@ -95,7 +92,10 @@ def make_runners(store, zotero: ZoteroLocalClient) -> dict[str, Any]:
             llm=llm_from_env(),
             html=ArxivHtml(),
         )
-        doc = run_daily(deps, _settings(store))
+        try:
+            doc = run_daily(deps, _settings(store))
+        except ZoteroLibraryUnavailable as error:
+            raise WaitForZotero(waiting_message) from error
         if doc.get("skipped"):
             return doc["headline"]
         return L("{} 篇推荐：{}", "{} picks: {}").format(len(doc["picks"]), doc["headline"])
@@ -115,11 +115,11 @@ def make_runners(store, zotero: ZoteroLocalClient) -> dict[str, Any]:
             len(doc["news"]), len(doc["deep"])
         )
 
-    def weekly(force: bool = False) -> str:
+    def weekly(force: bool = False, *, target: date | None = None) -> str:
         from ..cloud.daily import TZ, today_local
         from ..cloud.weekly import run_weekly
 
-        day: date = today_local() if force else weekly_target(datetime.now(TZ))
+        day = target or (today_local() if force else weekly_target(datetime.now(TZ)))
         week = run_weekly(store, llm_from_env(), _settings(store), day)
         return week.get("headline", "")
 

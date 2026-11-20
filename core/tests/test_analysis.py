@@ -194,6 +194,19 @@ def test_analyze_retries_empty_review_without_marking_it_complete():
     )
 
 
+def test_analyze_recovers_from_invalid_imported_review_formats():
+    store, llm = SqliteStore(), FakeLLM()
+    analyses = ("text", ["text"], {"review": "  \n\t"}, {"review": "已有解读"})
+    ids = [f"paper-{i}" for i in range(len(analyses))]
+    for pid, analysis in zip(ids, analyses, strict=True):
+        repo.upsert_paper(store, {**REC, "id": pid, "source": "openreview", "analysis": analysis})
+
+    imported = list(repo.papers_by_ids(store, ids).values())
+    assert analyze_papers(store, llm, imported, "", None) == 3
+    saved = repo.papers_by_ids(store, ids)
+    assert [saved[pid]["analysis"]["review"] for pid in ids] == ["一段评论"] * 3 + ["已有解读"]
+
+
 def test_parse_json_object_repairs_unescaped_quotes():
     from robot_times.llm.rerank import parse_json_object
 

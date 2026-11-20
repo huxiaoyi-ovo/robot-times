@@ -157,7 +157,7 @@ def _html(http: httpx.Client, src: dict) -> list[dict]:
     pattern = re.compile(src["pattern"])
     found = re.findall(r'<a\b[^>]*?href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', resp.text, re.S | re.I)
     anchors = [
-        (urljoin(src["url"], h), inner) for h, inner in found
+        (urljoin(str(resp.url), h), inner) for h, inner in found
     ]  # 相对路径（./slug）先解析成完整地址
     if not anchors or not any(pattern.match(h) for h, _ in anchors):
         hrefs = [h for h, _ in found][:15]  # 没匹配到：把页面长什么样记下来，方便调整规则

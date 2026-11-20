@@ -151,9 +151,15 @@ def set_json(store: Store, key: str, value: Any) -> None:
 
 
 def known_paper_ids(store: Store, before: str | None = None) -> set[str]:
-    """以前推荐过的论文（before 之前加入的），避免重复推荐；当天重跑时当天的不算。"""
+    """返回论文库编号。给了 before 时，只返回该日期之前发布的推荐论文。"""
     if before:
-        return {r["id"] for r in store.rows("select id from papers where added_on < ?", [before])}
+        rows = store.rows(
+            "select distinct picks.value as id from days "
+            "cross join json_each(days.data, '$.picks') as picks "
+            "where days.date < ? and picks.type = 'text'",
+            [before],
+        )
+        return {r["id"] for r in rows}
     return {r["id"] for r in store.rows("select id from papers")}
 
 

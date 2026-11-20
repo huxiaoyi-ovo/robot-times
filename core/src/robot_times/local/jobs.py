@@ -37,15 +37,39 @@ NEWS_HOUR = 8  # 业界简报几点以后生成（北京时间）
 RETRY_AFTER = timedelta(hours=3)  # 失败或没有新论文时，隔多久再自动试
 
 
-def due(store: Store, now: datetime | None = None) -> list[str]:
+def _stored_attempts(store: Store) -> dict[str, Any]:
+    try:
+        value = repo.get_json(store, "local_runs")
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def due(
+    store: Store,
+    now: datetime | None = None,
+    *,
+    recent_attempts: dict[str, datetime] | None = None,
+) -> list[str]:
     """现在该自动跑哪些任务（按顺序）。"""
     now = (now or datetime.now(TZ)).astimezone(TZ)
     today = now.date()
-    tried: dict[str, str] = repo.get_json(store, "local_runs") or {}
+    tried = _stored_attempts(store)
 
     def tried_since(kind: str, t: datetime) -> bool:
+        recent = (recent_attempts or {}).get(kind)
+        if recent is not None and recent.astimezone(TZ) >= t:
+            return True
         at = tried.get(kind)
-        return bool(at) and datetime.fromisoformat(at) >= t
+        if not isinstance(at, str):
+            return False
+        try:
+            timestamp = datetime.fromisoformat(at)
+        except ValueError:
+            return False
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=TZ)
+        return timestamp >= t
 
     out = []
     release = now.replace(hour=RELEASE_HOUR + 1, minute=30, second=0, microsecond=0)
@@ -94,7 +118,7 @@ class WaitForZotero(RuntimeError):
 
 
 class Jobs:
-    """同一时间只跑一个任务，其余排队。runners[kind]() 返回一句结果说明。"""
+    """同一时间只跑一个任务，其余排队。自动周报 runner 会收到入队时的目标日期。"""
 
     def __init__(
         self,
@@ -109,10 +133,12 @@ class Jobs:
         self.background = background
         self.clock = clock
         self._lock = threading.Lock()
-        self._queue: list[tuple[str, bool]] = []
+        self._queue: list[tuple[str, bool, date | None]] = []
         self._current: str | None = None
         self._last: dict[str, Any] | None = None
         self._started: str | None = None
+        self._recent_attempts: dict[str, datetime] = {}
+        self._completed: dict[str, int] = {}
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -120,7 +146,7 @@ class Jobs:
                 "running": self._current,
                 "label": label(self._current or ""),
                 "startedAt": self._started,
-                "queue": [k for k, _ in self._queue],
+                "queue": [kind for kind, _, _ in self._queue],
                 "last": self._last or self._remembered(),
             }
 
@@ -137,10 +163,12 @@ class Jobs:
     def auto(self) -> dict[str, Any]:
         """打开看板时调用：今天该有的还没有，就排进队列。"""
         with self._lock:
-            busy = {self._current, *(k for k, _ in self._queue)}
-        for kind in due(self.store, self.clock()):
-            if kind not in busy:
-                self._enqueue(kind, False)
+            completed = self._completed.copy()
+            attempts = self._recent_attempts.copy()
+        now = self.clock()
+        for kind in due(self.store, now, recent_attempts=attempts):
+            target = weekly_target(now) if kind == "weekly" else None
+            self._enqueue(kind, False, completed=completed.get(kind, 0), target=target)
         return self.status()
 
     def start(self, kind: str, force: bool = True) -> dict[str, Any]:
@@ -150,11 +178,21 @@ class Jobs:
         self._enqueue(kind, force)
         return self.status()
 
-    def _enqueue(self, kind: str, force: bool) -> None:
+    def _enqueue(
+        self,
+        kind: str,
+        force: bool,
+        *,
+        completed: int | None = None,
+        target: date | None = None,
+    ) -> None:
         with self._lock:
-            if kind == self._current or any(k == kind for k, _ in self._queue):
+            # The due check runs without the queue lock. Discard work already completed meanwhile.
+            if completed is not None and completed != self._completed.get(kind, 0):
                 return
-            self._queue.append((kind, force))
+            if kind == self._current or any(k == kind for k, _, _ in self._queue):
+                return
+            self._queue.append((kind, force, target))
             if self._current is not None:
                 return
             self._current = "starting"
@@ -170,7 +208,7 @@ class Jobs:
                     self._current = None
                     self._started = None
                     return
-                kind, force = self._queue.pop(0)
+                kind, force, target = self._queue.pop(0)
                 self._current = kind
                 self._started = self.clock().isoformat(timespec="seconds")
             try:  # 失败原因和办法按设置的语言写（会存下来，重启后还显示）
@@ -180,8 +218,11 @@ class Jobs:
             log.info("开始：%s", LABELS[kind])
             result: dict[str, Any] = {"kind": kind, "ok": True, "message": ""}
             waiting = False
+            args: dict[str, Any] = {"force": force}
+            if target is not None:
+                args["target"] = target
             try:
-                result["message"] = self.runners[kind](force=force) or ""
+                result["message"] = self.runners[kind](**args) or ""
             except (
                 WaitForZotero
             ) as e:  # Zotero 没开：不算“试过”，定时检查时 Zotero 一打开就接着生成
@@ -191,15 +232,17 @@ class Jobs:
             except Exception as e:  # 一个任务失败不影响下一个
                 log.exception("%s 失败", LABELS[kind])
                 result.update(ok=False, message=f"{type(e).__name__}: {str(e)[:300]}")
-            finally:
-                if not waiting:
-                    try:
-                        tried = repo.get_json(self.store, "local_runs") or {}
-                        tried[kind] = self.clock().isoformat(timespec="seconds")
-                        repo.set_json(self.store, "local_runs", tried)
-                    except Exception:
-                        log.exception("记录任务重试时间失败")
-            result["at"] = self.clock().isoformat(timespec="seconds")
+            finished = self.clock()
+            result["at"] = finished.isoformat(timespec="seconds")
+            if not waiting:
+                with self._lock:
+                    self._recent_attempts[kind] = finished
+                try:
+                    tried = _stored_attempts(self.store)
+                    tried[kind] = result["at"]
+                    repo.set_json(self.store, "local_runs", tried)
+                except Exception:
+                    log.exception("记录任务重试时间失败")
             if not result["ok"]:  # 看板上显示原因和办法
                 from .diagnose import explain
 
@@ -212,6 +255,7 @@ class Jobs:
                 log.exception("记录任务结果失败")
             with self._lock:
                 self._last = result
+                self._completed[kind] = self._completed.get(kind, 0) + 1
             log.info("完成：%s %s", LABELS[kind], result["message"])
 
 

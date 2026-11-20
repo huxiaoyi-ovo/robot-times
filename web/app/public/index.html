@@ -978,6 +978,7 @@ const EN = {
   "今日推荐":"Today's picks",
   "简讯":"Briefly",
   "扫标题 {n} 分钟":"skim titles, {n} min",
+  "额外推荐":"More recommendations",
   "刚刚":"just now",
   "{n} 小时前":"{n}h ago",
   "讨论":"Discussion",
@@ -1018,7 +1019,7 @@ const EN = {
   "安排":"Plan",
   "论文":"Papers",
   "时间":"Time",
-  "工作日每天另外留 10 分钟扫当天的新推荐、10 分钟写笔记":"On weekdays, also keep 10 minutes for the day's new picks and 10 for notes",
+  "工作日每天另外留 {scan} 分钟扫当天的新推荐、{note} 分钟写笔记":"On weekdays, also keep {scan} minutes for the day's new picks and {note} for notes",
   "本周最值得读的":"Most worth reading this week",
   "按综合分排序":"by score",
   "搜标题、作者、要点或 arXiv 编号":"Search titles, authors, gists or arXiv IDs",
@@ -1347,7 +1348,7 @@ const S = {ready:false, error:null, me:"", settings:null, features:{},
   papers:{}, days:[], weeks:[], notes:{}, zotero:{}, feedback:{},
   tab:(location.hash.slice(1)||"today"), dayIdx:0, weekIdx:0, open:null, order:[],
   lib:{q:"", status:"", list:null, total:0, loading:false}, wDraft:null, introDone:false,
-  news:null, newsDates:[], newsIdx:0, newsCache:{}};
+  news:null, newsDates:[], newsIdx:0, newsCache:{}, dailyWeather:null};
 if(!TABS.some(([k])=>k===S.tab)) S.tab="today";
 
 const $ = s => document.querySelector(s);
@@ -1582,7 +1583,9 @@ function viewToday(){
   const secs=sectionsOf(day), st=day.stats||{};
   const get=m=>secs.find(s=>s.mode===m);
   const deep=get("deep"), note=get("note"), abs=get("abstract"), scan=get("scan"), review=get("review");
-  S.order=[...(deep?.ids||[]), ...(abs?.ids||[]), ...(review?.ids||[]), ...(scan?.ids||[])];
+  const scheduled=new Set(secs.filter(s=>s.mode!=="note").flatMap(s=>s.ids));
+  const extra=[...new Set(day.picks||[])].filter(id=>S.papers[id]&&!scheduled.has(id));
+  S.order=[...(deep?.ids||[]), ...(abs?.ids||[]), ...(review?.ids||[]), ...(scan?.ids||[]), ...extra];
   const older=S.dayIdx<S.days.length-1, newer=S.dayIdx>0;
   const leadP=deep?.ids.map(id=>S.papers[id])[0];
   const others=secs.filter(s=>!["deep","note","abstract","scan","review"].includes(s.mode));
@@ -1607,6 +1610,7 @@ function viewToday(){
       </article>
       ${planRail(secs)}
       ${scan?.ids.length?`<section class="rsect" id="briefs"><p class="lbl">${t("简讯")}<span>${t("扫标题 {n} 分钟",{n:scan.minutes})}</span></p><ol class="rlist">${scan.ids.map(id=>briefItem(S.papers[id])).join("")}</ol></section>`:""}
+      ${extra.length?`<section class="rsect"><p class="lbl">${t("额外推荐")}</p><ol class="rlist">${extra.map(id=>briefItem(S.papers[id])).join("")}</ol></section>`:""}
     </aside>
   </div>
   ${industryBand("deep")}`;
@@ -1725,11 +1729,22 @@ function viewWeek(){
   const visibleIds=ids=>(ids||[]).filter(id=>S.papers[id]);
   const order=new Set((w.trends||[]).flatMap(trend=>visibleIds(trend.paperIds)));
   const older=S.weekIdx<S.weeks.length-1, newer=S.weekIdx>0;
-  const rows=(w.nextWeek?.plan||[]).flatMap((d,i)=>{
+  const plan=w.nextWeek?.plan||[];
+  const isRoutine=it=>it.mode==="scan"||it.mode==="note";
+  const routine=plan.slice(0,5).map(d=>{
+    const times={scan:0,note:0};
+    for(const it of d.items||[]){
+      if(isRoutine(it)) times[it.mode]+=Number(it.minutes)||0;
+    }
+    return times;
+  });
+  const common=routine[0];
+  const summarize=common?.scan>0&&common.note>0&&routine.every(r=>r.scan===common.scan&&r.note===common.note);
+  const rows=plan.flatMap((d,i)=>{
     const [wd,md]=(d.day||"").split(" ");
-    const items=(d.items||[]).filter(it=>it.mode!=="note"&&!(it.mode==="scan"&&i<5));
+    const items=(d.items||[]).filter(it=>!summarize||i>=5||!isRoutine(it));
     return items.map((it,j)=>{
-      const ids=visibleIds(it.paperIds);
+      const ids=i<5&&isRoutine(it) ? [] : visibleIds(it.paperIds);
       ids.forEach(id=>order.add(id));
       const kind = it.mode==="deep" && it.task ? it.task : modeName(it.mode);
       return `<tr class="${i>=5?"weekend":""}">
@@ -1750,7 +1765,7 @@ function viewWeek(){
     ${w.trends?.length?`<section class="sect"><div class="sect-h"><h2>${t("本周主题")}</h2></div><div class="row3 themes2">${w.trends.map(t=>`<article><h3 class="ht">${esc(t.title)}</h3><p class="psum">${esc(t.body)}</p><ul class="refs2">${visibleIds(t.paperIds).map(id=>`<li><button class="hit" data-open="${esc(id)}"><span class="ul">${esc(S.papers[id].title)}</span></button></li>`).join("")}</ul></article>`).join("")}</div></section>`:""}
     ${rows?`<section class="sect"><div class="sect-h"><h2>${t("下周怎么读")}</h2><span class="cnt">${esc(venueText(w.nextWeek.range||"").replace(" 每天","，每天"))}</span></div>
       <table class="plan"><thead><tr><th>${t("日期")}</th><th class="k">${t("安排")}</th><th>${t("论文")}</th><th style="text-align:right">${t("时间")}</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="mline" style="margin-top:10px">${t("工作日每天另外留 10 分钟扫当天的新推荐、10 分钟写笔记")}</p></section>`:""}
+      ${summarize?`<p class="mline" style="margin-top:10px">${t("工作日每天另外留 {scan} 分钟扫当天的新推荐、{note} 分钟写笔记",common)}</p>`:""}</section>`:""}
     ${picks.length?`<section class="sect"><div class="sect-h"><h2>${t("本周最值得读的")}</h2><span class="cnt">${t("按综合分排序")}</span></div>
       <ol class="ranked">${picks.map(p=>`<li><span class="t">${titleBtn(p)}${stamps(p.id)}</span>${scoreEl(p)}<p class="why">${esc(p.why||"")}</p></li>`).join("")}</ol></section>`:""}`;
 }
@@ -1760,7 +1775,7 @@ function viewLib(){
   const L=S.lib;
   if(L.list===null && !L.loading) loadLib();
   const list=(L.list||[]).map(id=>S.papers[id]).filter(Boolean);
-  S.order=list.map(p=>p.id);
+  if(!S.open) S.order=list.map(p=>p.id);
   return `<div class="search"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.6"><circle cx="8.5" cy="8.5" r="6"/><path d="M13 13l5 5"/></svg><input type="search" id="lib-q" placeholder="${t("搜标题、作者、要点或 arXiv 编号")}" value="${esc(L.q)}" aria-label="${t("搜索论文")}"></div>
     <div class="filters">${[["","全部"],...STATUS].map(([k,l])=>`<button data-status="${k}" aria-pressed="${L.status===k}">${t(l)}</button>`).join("")}<span class="faint" style="margin-left:auto">${L.list===null?t("载入中…"):t("{n} 篇",{n:L.total})+(L.total>list.length?t("，先显示 {n} 篇",{n:list.length}):"")}</span></div>
     ${list.length?`<ol class="archive">${libRows(list)}</ol>`
@@ -1782,7 +1797,8 @@ let libTimer=null, libSeq=0;
 function reloadLib(delay=0){
   clearTimeout(libTimer);
   ++libSeq;
-  Object.assign(S.lib,{list:null, total:0, loading:true});
+  Object.assign(S.lib,{list:null, total:0, loading:S.tab==="lib"});
+  if(S.tab!=="lib") return;
   const more=$("#lib-more"); if(more) more.disabled=true;
   if(delay) libTimer=setTimeout(()=>loadLib(),delay);
   else loadLib();
@@ -2123,6 +2139,7 @@ const WX_ICONS={
   storm:`<path d="M6.5 13h11a3.6 3.6 0 0 0 .4-7.2 5 5 0 0 0-9.6 1.4A2.9 2.9 0 0 0 6.5 13z"/><path class="wx-bolt" d="M12.8 14.5l-2.6 4h2.4l-1.4 3.6 3.8-5h-2.5l1.6-2.6z" fill="currentColor" stroke="none"/>`,
 };
 function weatherEl(w, today){
+  if(!w) return `<button class="wx" data-wx>${t("天气地点")}</button>`;
   const old = !w.live && w.date && w.date!==today;
   const range = w.tmin!=null&&w.tmax!=null ? t("今天 {a}°–{b}°",{a:+w.tmin,b:+w.tmax}) : "";
   const tip = [w.city, w.live?t("实时"):old?t("{d}的预报",{d:fmtDate(w.date)}):t("今天的预报"), range, w.pop!=null?t("降水概率 {p}%",{p:+w.pop}):""].filter(Boolean).join(t("，"));
@@ -2148,7 +2165,7 @@ function openWxPop(btn){
   pop.innerHTML=`<p class="lbl">${t("天气地点")}</p>
     <input id="wx-q" type="text" placeholder="${t("输入城市，例如 杭州、上海、Boston")}" autocomplete="off">
     <ul id="wx-res" role="listbox"></ul>
-    <div class="wxpop-foot"><span>${t("现在：")}${esc(S.weather?.city||"—")}${place?t("（手动）"):t("（自动定位）")}</span>${place?`<button id="wx-geo" class="mlink">${t("改回用我的位置")}</button>`:""}</div>`;
+    <div class="wxpop-foot"><span>${t("现在：")}${esc(place?.name||S.weather?.city||"—")}${place?t("（手动）"):t("（自动定位）")}</span>${place?`<button id="wx-geo" class="mlink">${t("改回用我的位置")}</button>`:""}</div>`;
   document.body.appendChild(pop);
   const q=pop.querySelector("#wx-q"); q.focus();
   q.addEventListener("input",()=>{
@@ -2202,6 +2219,16 @@ async function cityName(lat, lon){
   }catch{ return t("当前位置"); }
 }
 function wxPlace(v){ try{ if(v===undefined) return JSON.parse(localStorage.getItem("wx-place")||"null"); if(v) localStorage.setItem("wx-place",JSON.stringify(v)); else localStorage.removeItem("wx-place"); localStorage.removeItem("wx"); }catch{ return null; } }
+function chooseWxPlace(place){
+  const current=wxPlace();
+  wxPlace(place);
+  closeWxPop();
+  if(current?.lat!==place?.lat || current?.lon!==place?.lon || current?.name!==place?.name){
+    S.weather=S.dailyWeather;
+    renderChrome();
+  }
+  return liveWeather(true);
+}
 let wxForecastSeq=0;
 async function liveWeather(force){
   const seq=++wxForecastSeq;
@@ -2237,10 +2264,11 @@ function renderChrome(){
   if(document.title!==site) document.title=site;
   const d0=S.days[0], st=d0?.stats||{}, picks=(d0?.picks||[]);
   const readN=picks.filter(isRead).length;
+  const weather=S.ready ? weatherEl(S.weather, today) : "";
   $("#dateline").innerHTML=`<b>${esc(longDate(today).replace("　"," "))}</b><button class="mlink" data-tab="today">${t("今日早报")}</button>`;
   $("#edition").innerHTML=S.ready?(s.categories||[]).map(c=>`<span>${esc(c)}</span>`).join("")+`<span>${t("早报")}</span>`:"";
-  $("#m1r").innerHTML=S.ready?`${S.weather?`<span class="wx-m">${weatherEl(S.weather, today)}</span>`:""}<button class="sub-btn" data-tab="today">${t("今日 {n} 篇",{n:picks.length})}</button><button class="acct" data-tab="cfg">${t("设置")} <svg viewBox="0 0 10 6" width="9" height="6" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1l4 4 4-4"/></svg></button>`:"";
-  $("#mastsub").innerHTML = (S.weather?weatherEl(S.weather, today):"") + (S.ready&&d0 ? `<span class="tick">${t("arXiv 新论文")} <b>${st.candidates??"—"}</b>　${t("已读")} <b>${readN}/${picks.length}</b></span>` : "");
+  $("#m1r").innerHTML=S.ready?`<span class="wx-m">${weather}</span><button class="sub-btn" data-tab="today">${t("今日 {n} 篇",{n:picks.length})}</button><button class="acct" data-tab="cfg">${t("设置")} <svg viewBox="0 0 10 6" width="9" height="6" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1l4 4 4-4"/></svg></button>`:"";
+  $("#mastsub").innerHTML = weather + (S.ready&&d0 ? `<span class="tick">${t("arXiv 新论文")} <b>${st.candidates??"—"}</b>　${t("已读")} <b>${readN}/${picks.length}</b></span>` : "");
 }
 function render(){
   renderChrome();
@@ -2252,7 +2280,7 @@ function render(){
   m.innerHTML=({today:viewToday,news:viewNews,week:viewWeek,lib:viewLib,notes:viewNotes,cfg:viewCfg})[S.tab]()
     + `<footer class="colophon"><span>${esc(S.site?.name||"The Robot Times")}　${t("由 arXiv 和 Hugging Face 的公开数据生成，摘要由大模型撰写，请以原文为准")}</span><span class="keys">${t("快捷键：<kbd>J</kbd><kbd>K</kbd> 上下篇，<kbd>Enter</kbd> 打开，<kbd>←</kbd><kbd>→</kbd> 文章间切换，<kbd>Esc</kbd> 关闭")}</span></footer>`;
   if(focusId&&document.getElementById(focusId)&&!document.getElementById(focusId).closest(".reader")){ const el=document.getElementById(focusId); el.focus(); try{ if(selStart!=null) el.setSelectionRange(selStart,selStart);}catch(e){} }
-  if(S.open) refreshReader();
+  if(S.open){ refreshReader(); loadReaderDetails(S.open); }
 }
 
 // 报头随滚动淡出、略微缩小
@@ -2266,11 +2294,24 @@ let aiCtl=null, aiText="", absLang="zh", closeTimer=null;
 const motionOK = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
 const paras = t => String(t||"").split(/\n\s*\n|\n/).map(x=>x.trim()).filter(Boolean).map(x=>`<p>${esc(x)}</p>`).join("");
 const full = {}; // 打开过的论文的完整数据（带解读）
+const detailPending = new Set();
 const readerPaper = id => full[id]&&S.papers[id] ? {...full[id], ...S.papers[id]} : S.papers[id];
-async function loadFull(id){
-  if(full[id]) return full[id];
-  const p=await api(`/api/paper/${encodeURIComponent(id)}`);
-  full[id]=p; S.papers[id]={...S.papers[id], ...p}; return p;
+async function loadReaderDetails(id){
+  const paper=S.papers[id], cached=full[id];
+  // 列表仅在省略了摘要译文或解读时附带 hasAnalysis，可能为 false。
+  if(paper?.hasAnalysis==null || (cached && (!paper.hasAnalysis || cached.analysis)) || detailPending.has(id)) return;
+  detailPending.add(id);
+  try{
+    full[id]=await api(`/api/paper/${encodeURIComponent(id)}`);
+    if(S.open===id) refreshAnalysis(id);
+  }catch(e){
+    const box=S.open===id&&$("#analysis");
+    if(box) box.innerHTML=`<p class="warn">${t("论文详情没载入：")}${esc(e.message)}</p>`;
+  }finally{
+    detailPending.delete(id);
+  }
+  // 若后台恰好在摘要请求期间生成了解读，再取一次详情。
+  if(S.open===id && !paper.hasAnalysis && S.papers[id]?.hasAnalysis && !full[id]?.analysis) return loadReaderDetails(id);
 }
 function figHtml(f, i){
   const label = `<b>${esc(f.label||"")}</b>`;
@@ -2315,7 +2356,7 @@ function articleHtml(id){
     <div id="analysis" style="display:contents">${analysisHtml(p)}</div>
     ${(p.related||[]).length?`<section class="sec rv"><h2>${t("你库里相近的")}</h2><ul class="related">${p.related.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></section>`:""}
     <section class="notebox rv" id="note-sec">
-      <div style="display:flex;align-items:baseline;gap:12px"><h2>${t("我的笔记")}</h2><span class="saved" id="saved">${pending[id]?t("保存中…"):""}</span></div>
+      <div style="display:flex;align-items:baseline;gap:12px"><h2>${t("我的笔记")}</h2><span class="saved" id="saved">${pending[id]?noteSaveLabel(pending[id]):""}</span><button class="btn link" id="note-retry" ${pending[id]?.failed?"":"hidden"}>${t("重试")}</button></div>
       <div class="seg" id="seg" role="group" aria-label="${t("阅读状态")}">${STATUS.map(([k,l])=>`<button data-st="${k}" aria-pressed="${(n.status||"todo")===k}">${t(l)}</button>`).join("")}</div>
       <div class="flags" id="flags">${FLAGS.map(f=>`<button class="flag" data-flag="${esc(f)}" aria-pressed="${(n.flags||[]).includes(f)}">${esc(t(f))}</button>`).join("")}</div>
       <textarea id="note-ta" rows="7" aria-label="${t("笔记")}" placeholder="${t("用自己的话写 3 到 5 句：&#10;问题：&#10;核心 idea：&#10;关键结果：&#10;我的看法 / 和 X 的区别：")}">${esc(n.note||"")}</textarea>
@@ -2381,8 +2422,7 @@ function openReader(id, focus, dir=1){
   if(focus==="note"){ const ta=$("#note-ta"); setTimeout(()=>{ ta.scrollIntoView({block:"center", behavior:smooth()}); ta.focus({preventScroll:true}); }, fresh?420:0); }
   else r.querySelector("[data-close].ibtn").focus({preventScroll:true});
   if(S.zotero[id]) checkZotero(id);
-  // 列表仅在省略了摘要译文或解读时附带 hasAnalysis，可能为 false。
-  if(p.hasAnalysis!=null&&!full[id]) loadFull(id).then(()=>{ if(S.open===id) refreshAnalysis(id); }).catch(e=>{ if(S.open===id){ $("#analysis").innerHTML=`<p class="warn">${t("论文详情没载入：")}${esc(e.message)}</p>`; } });
+  loadReaderDetails(id);
 }
 function refreshAnalysis(id){
   const p=readerPaper(id), box=$("#analysis"); if(!p||!box) return;
@@ -2447,35 +2487,59 @@ function refreshReader(){
 }
 
 /* ---------- 写入 ---------- */
-const pending={}, chain={}, timers={};
+const pending={}, chain={}, timers={}, noteVersions=new Map();
+const noteSaveLabel=edit=>t(edit?.failed?"没保存上":edit?"保存中…":"已保存");
+function showNoteSave(id){
+  if(S.open!==id) return;
+  const saved=$("#saved"), retry=$("#note-retry");
+  if(saved) saved.textContent=noteSaveLabel(pending[id]);
+  if(retry) retry.hidden=!pending[id]?.failed;
+}
 function patchNote(id, patch, delay){
-  S.notes={...S.notes,[id]:{status:"todo",note:"",flags:[],...noteOf(id), ...patch, paperId:id, updatedAt:new Date().toISOString()}};
-  pending[id]=Symbol(); const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("保存中…");
+  const prev=noteOf(id);
+  const refreshLibrary=pending[id]?.refreshLibrary||("status" in patch&&patch.status!==(prev.status||"todo"));
+  S.notes={...S.notes,[id]:{status:"todo",note:"",flags:[],...prev, ...patch, paperId:id, updatedAt:new Date().toISOString()}};
+  pending[id]={refreshLibrary};
+  noteVersions.set(id,Symbol());
+  showNoteSave(id);
   clearTimeout(timers[id]);
   timers[id]=setTimeout(()=>flush(id), delay||0);
 }
 function flush(id){
-  const edit=pending[id]; if(!edit) return;
+  const edit=pending[id]; if(!edit) return Promise.resolve(true);
+  if(edit.promise) return edit.promise;
+  clearTimeout(timers[id]); delete timers[id];
+  edit.failed=false; showNoteSave(id);
   const n=S.notes[id], body=JSON.stringify({status:n.status, note:n.note, flags:n.flags});
-  chain[id]=(chain[id]||Promise.resolve()).then(()=>api(`/api/notes/${encodeURIComponent(id)}`,{method:"PUT", body})).then(saved=>{
-    if(pending[id]!==edit) return;
-    delete pending[id]; S.notes[id]={...S.notes[id], updatedAt:saved.updatedAt};
-    const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("已保存");
-  }).catch(e=>{
-    if(pending[id]!==edit) return;
-    delete pending[id];
-    const sv=$("#saved"); if(sv&&S.open===id) sv.textContent=t("没保存上");
-    toast(e);
+  const write=(chain[id]||Promise.resolve()).then(()=>api(`/api/notes/${encodeURIComponent(id)}`,{method:"PUT", body})).then(saved=>{
+    if(pending[id]===edit){
+      delete pending[id]; S.notes[id]={...S.notes[id], updatedAt:saved.updatedAt};
+      noteVersions.set(id,Symbol());
+      showNoteSave(id);
+    }
+    if(edit.refreshLibrary&&S.lib.status) reloadLib();
+    return true;
+  },e=>{
+    if(pending[id]===edit){
+      edit.failed=true; edit.promise=null;
+      showNoteSave(id); toast(e);
+    }
+    return false;
   });
+  edit.promise=chain[id]=write;
+  write.then(()=>{ if(chain[id]===write) delete chain[id]; });
+  return write;
 }
 window.addEventListener("beforeunload", e=>{ if(Object.values(pending).some(Boolean)){ e.preventDefault(); e.returnValue=""; } });
 
 function setStatus(id, st){ patchNote(id,{status:st}); if(S.open===id) refreshReader(); else render(); }
 async function addZotero(id){
   id=id||S.open; if(!id||zBusy) return;
-  if(pending[id]){ clearTimeout(timers[id]); flush(id); await chain[id]; }
   zBusy=true; if(S.open===id) refreshReader();
   try{
+    while(pending[id]){
+      if(!await flush(id)&&pending[id]?.failed) return;
+    }
     const r=await api(`/api/zotero/${encodeURIComponent(id)}`,{method:"POST"});
     S.zotero[id]=r.key;
     const where=r.folder?t("“{f}”文件夹",{f:r.folder}):t("“我的文库”");
@@ -2486,7 +2550,7 @@ async function addZotero(id){
   }catch(e){ toast(e); }
   finally{ zBusy=false; if(S.open===id) refreshReader(); else render(); }
 }
-const feedbackWrites=new Map();
+const feedbackWrites=new Map(), feedbackVersions=new Map();
 function sendFeedback(id, action, quiet){
   const prev=S.feedback[id];
   const next = prev===action && !quiet ? "clear" : action;
@@ -2494,6 +2558,7 @@ function sendFeedback(id, action, quiet){
   const write=feedbackWrites.get(id)||{saved:prev, chain:Promise.resolve()};
   const edit=Symbol(); write.latest=edit;
   feedbackWrites.set(id,write);
+  feedbackVersions.set(id,edit);
   S.feedback[id]=value; if(S.open===id) refreshReader();
   write.chain=write.chain.then(async()=>{
     try{
@@ -2505,6 +2570,7 @@ function sendFeedback(id, action, quiet){
     }finally{
       if(write.latest===edit){
         S.feedback[id]=write.saved; feedbackWrites.delete(id);
+        feedbackVersions.set(id,Symbol());
         if(S.open===id) refreshReader();
       }
     }
@@ -2606,16 +2672,22 @@ function showJob(){
 let jobTimer=null, jobPolling=false;
 function watchJob(){
   if(jobTimer||!(isLocal()||S.features.run)) return;
+  let completed=null;
   jobTimer=setInterval(async()=>{
     if(jobPolling) return;
     jobPolling=true;
     try{
-      const j=await api("/api/job"), was=S.job; S.job=j; showJob();
+      const was=S.job, j=await api("/api/job");
+      if(S.job!==was) return;
+      S.job=j; showJob();
       if(jobBusy(j)) return;
+      if(j.last?.ok && jobBusy(was)) completed=j.last;
       await loadAll(); render();
       if(!jobBusy(S.job)){ clearInterval(jobTimer); jobTimer=null; }
-      const last=j.last;
-      if(last && jobBusy(was) && last.ok) toast(t("生成好了")+(last.message?t("：")+last.message:""));  // 失败的在上面的提示条里
+      if(completed){
+        toast(t("生成好了")+(completed.message?t("：")+completed.message:""));
+        completed=null;
+      }
       showJob();
     }catch{}
     finally{ jobPolling=false; }
@@ -2633,8 +2705,8 @@ document.addEventListener("click", e=>{
   if(d.nav){ navReader(+d.nav); return; }
   if(d.zoom){ openZoom(d.zoom); return; }
   if(d.wx!==undefined){ openWxPop(el); return; }
-  if(d.wxpick){ wxPlace(JSON.parse(d.wxpick)); closeWxPop(); liveWeather(true); toast(t("天气地点已记住")); return; }
-  if(el.id==="wx-geo"){ wxPlace(null); closeWxPop(); liveWeather(true); toast(t("改回按你的位置显示天气")); return; }
+  if(d.wxpick){ chooseWxPlace(JSON.parse(d.wxpick)); toast(t("天气地点已记住")); return; }
+  if(el.id==="wx-geo"){ chooseWxPlace(null); toast(t("改回按你的位置显示天气")); return; }
   if(d.abs&&S.open){ absLang=d.abs; const ab=$("#abs"); if(ab){ ab.outerHTML=absHtml(readerPaper(S.open)); $("#abs").classList.add("in"); } return; }
   if(d.jump){ const el=document.getElementById(d.jump); if(el) window.scrollTo({top:el.getBoundingClientRect().top+scrollY-64, behavior:smooth()}); return; }
   if(d.day){ S.dayIdx=Math.max(0,Math.min(S.days.length-1,S.dayIdx+ +d.day)); render(); return; }
@@ -2663,6 +2735,7 @@ document.addEventListener("click", e=>{
   if(d.run) return runJob(d.run, el);
   if(el.id==="z-add") return addZotero();
   if(el.id==="z-del") return removeZotero();
+  if(el.id==="note-retry"&&S.open) return flush(S.open);
   if(el.id==="lib-more") return loadLib(true);
   if(el.id==="ai-ask") return runAI("ask");
   if(el.id==="ai-check") return runAI("check");
@@ -2724,17 +2797,35 @@ function showHint(){
 }
 function hideHint(){ try{ localStorage.setItem("hint-install","off"); }catch{} $("#hintbar").hidden=true; }
 
+let bootstrapSeq=0, bootstrapApplied=0;
 async function loadAll(){
-  const notesAtStart={...S.notes};
+  const seq=++bootstrapSeq, notesAtStart=new Map(noteVersions), feedbackAtStart=new Map(feedbackVersions);
+  const jobAtStart=S.job;
   const b=await api("/api/bootstrap");
+  if(seq<bootstrapApplied) return;
+  bootstrapApplied=seq;
+  // Keep edits and writes that overlapped the server snapshot.
   const notes={...b.notes};
-  // 刷新期间编辑或保存的笔记比这次快照新。
-  for(const [id,note] of Object.entries(S.notes)){
-    if(pending[id]||note!==notesAtStart[id]) notes[id]=note;
+  for(const [id,version] of noteVersions){
+    if(pending[id]||version!==notesAtStart.get(id)) notes[id]=S.notes[id];
   }
-  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job:b.job||null, update:b.update||null, autostart:b.autostart??null, setup:(S.setup?.reopened && !S.setup.done) ? S.setup : (b.setup||null), settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
-    notes, papers:b.papers||{}, zotero:b.zotero||{}, feedback:b.feedback||{}, ready:true,
-    news:b.news||null, newsDates:b.newsDates||[], weather:S.weather?.live?S.weather:(b.weather||S.weather||null), site:b.site||null});
+  const feedback={...b.feedback};
+  for(const [id,version] of feedbackVersions){
+    if(feedbackWrites.has(id)||version!==feedbackAtStart.get(id)){
+      if(S.feedback[id]===undefined) delete feedback[id];
+      else feedback[id]=S.feedback[id];
+    }
+  }
+  // Bootstrap only includes recent recommendations and papers with saved notes.
+  const papers={...b.papers};
+  for(const id of [...(S.lib.list||[]), S.open, ...Object.keys(notes)]){
+    if(!papers[id]&&S.papers[id]) papers[id]=S.papers[id];
+  }
+  const job=S.job===jobAtStart ? (b.job||null) : S.job;
+  const dailyWeather=b.weather||null;
+  Object.assign(S,{me:b.me, mode:b.mode||"cloud", job, update:b.update||null, autostart:b.autostart??null, setup:(S.setup?.reopened && !S.setup.done) ? S.setup : (b.setup||null), settings:b.settings, features:b.features||{}, days:b.days||[], weeks:b.weeks||[],
+    notes, papers, zotero:b.zotero||{}, feedback, ready:true,
+    news:b.news||null, newsDates:b.newsDates||[], dailyWeather, weather:S.weather?.live?S.weather:dailyWeather, site:b.site||null});
   if(b.news) S.newsCache[b.news.date]=b.news;
   if(!needsSetup() && b.settings?.lang && b.settings.lang!==LANG){ setUiLang(b.settings.lang); }
 }

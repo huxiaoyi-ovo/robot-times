@@ -66,19 +66,31 @@ FETCH_LIMIT = 2500  # 一次最多抓多少篇；cs.RO 5 天约 700 篇，再加
 SEEN_KEEP_DAYS = 14
 
 
-def fresh_candidates(store: Store, papers: list[Paper], day: date) -> list[Paper]:
-    """去掉以前几天已经当过候选的论文（当天重跑时，当天的候选照样保留）。
-
-    同时把这次的候选记下来，只保留最近两周。
-    """
-    today = day.isoformat()
+def _published_seen(store: Store) -> dict[str, str]:
     seen: dict[str, str] = repo.get_json(store, "seen") or {}
-    fresh = [p for p in papers if seen.get(p.id, today) >= today]
+    if not seen:
+        return seen
+    dates = {
+        row["date"]
+        for row in store.rows("select date from days where date >= ?", [min(seen.values())])
+    }
+    return {pid: first for pid, first in seen.items() if first in dates}
+
+
+def fresh_candidates(store: Store, papers: list[Paper], day: date) -> list[Paper]:
+    """去掉之前已发布早报里的候选，当天重跑时仍可使用同一批论文。"""
+    today = day.isoformat()
+    seen = _published_seen(store)
+    return [p for p in papers if seen.get(p.id, today) >= today]
+
+
+def _remember_candidates(store: Store, papers: list[Paper], day: date) -> None:
+    today = day.isoformat()
+    seen = _published_seen(store)
     for p in papers:
         seen.setdefault(p.id, today)
     oldest = (day - timedelta(days=SEEN_KEEP_DAYS)).isoformat()
     repo.set_json(store, "seen", {k: v for k, v in seen.items() if v >= oldest})
-    return fresh
 
 
 def deep_first(scored: list[ScoredPaper], window: int = 5) -> list[ScoredPaper]:
@@ -231,7 +243,8 @@ def _run_daily(
     library = deps.zotero.top_items()
     log.info("文献库 %d 条", len(library))
     fetched = deps.fetch_papers(settings.get("categories") or preset["categories"], FETCH_DAYS)
-    papers = fresh_candidates(store, fetched, day)
+    published_ids = repo.known_paper_ids(store, before=day.isoformat())
+    papers = [p for p in fresh_candidates(store, fetched, day) if p.id not in published_ids]
     log.info("arXiv 最近 %d 天 %d 篇，其中新候选 %d 篇", FETCH_DAYS, len(fetched), len(papers))
     fetch_limit = FETCH_LIMIT if deps.fetch_limit is None else deps.fetch_limit
     if fetched and len(fetched) >= fetch_limit:  # 按提交时间倒序抓，到上限就停
@@ -272,7 +285,6 @@ def _run_daily(
 
     liked, skipped = repo.feedback_texts(store)
     llm_errors: list[str] = []
-    known = arxiv_ids_in_library(library) | repo.known_paper_ids(store, before=day.isoformat())
     scored = recommend(
         papers,
         library,
@@ -280,7 +292,7 @@ def _run_daily(
         weights=weights,
         llm=deps.llm,
         interests=settings.get("interests", ""),
-        known_ids=known,
+        known_ids=arxiv_ids_in_library(library),
         liked_texts=liked,
         skipped_texts=skipped,
         annotate=annotate,
@@ -356,5 +368,9 @@ def _run_daily(
         "generatedAt": repo.now_iso(),
     }
     repo.save_day(store, day_doc)
+    try:
+        _remember_candidates(store, papers, day)
+    except Exception:
+        log.exception("保存 %s 的候选论文记录失败", added_on)
     log.info("已保存 %s 的推荐：%d 篇", added_on, len(records))
     return day_doc
