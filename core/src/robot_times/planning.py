@@ -62,18 +62,20 @@ def day_plan(
     scan_m = _round5(minutes * 0.15) if scan else 0
     abs_m = _round5(minutes * 0.35) if abstract else 0
     note_m = _round5(minutes * 0.10)
+    if deep:
+        scan_m = min(scan_m, max(0, minutes - abs_m - note_m - 5))
     deep_m = max(5, minutes - scan_m - abs_m - note_m)  # 没有某一层时，省下的时间给精读
     if not deep and abstract:
         abs_m, deep_m = abs_m + deep_m, 0
     plan: list[dict] = []
-    if scan:
+    if scan_m:
         plan.append({"minutes": scan_m, "mode": "scan", "paperIds": scan,
                      "task": t["scan"]})  # fmt: skip
     if abstract:
         plan.append({"minutes": abs_m, "mode": "abstract", "paperIds": abstract,
                      "task": t["abstract"]})  # fmt: skip
-    if reading:
-        cont = min(10, deep_m // 3)
+    cont = min(10, deep_m // 3) if reading else 0
+    if cont:
         deep_m -= cont
         plan.append({"minutes": cont, "mode": "review", "paperIds": reading,
                      "task": t["review"]})  # fmt: skip

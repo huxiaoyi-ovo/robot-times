@@ -432,6 +432,14 @@ def test_day_plan_reassigns_unused_time():
     assert sum(i["minutes"] for i in day_plan(45, [], ["a"], ["s"])) == 45
 
 
+def test_short_day_plans_fit_the_daily_budget():
+    for minutes in range(15, 21):
+        plan = day_plan(minutes, ["d"], ["a"], ["s"], reading=["r"])
+        assert sum(item["minutes"] for item in plan) == minutes
+        assert all(item["minutes"] > 0 for item in plan)
+        assert {item["mode"] for item in plan} >= {"deep", "abstract", "note", "review"}
+
+
 def test_deep_read_is_the_best_fit_not_the_most_popular():
     from robot_times.cloud.daily import deep_first
     from robot_times.models import ScoredPaper
