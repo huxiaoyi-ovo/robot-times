@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
+from bs4 import BeautifulSoup
 
 log = logging.getLogger("robot_times.news")
 UA = "Mozilla/5.0 (compatible; robot-times/0.1; personal news digest)"
@@ -131,10 +132,6 @@ def _rss(
 
 
 _IMG = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.I)
-_OG_IMAGE = re.compile(
-    r'<meta[^>]+(?:property|name)=["\'](?:og:image|twitter:image)["\'][^>]+content=["\']([^"\']+)',
-    re.I,
-)
 
 
 def _feed_image(entry: Any, html_text: str) -> str | None:
@@ -176,16 +173,16 @@ def _html(http: httpx.Client, src: dict) -> list[dict]:
         out.append(_item(src, title, url, None, ""))  # 列表页没有日期，按第一次看到的日子算
     for it in out[:8]:  # 列表页没有摘要：读文章页的 description，给大模型判断用
         try:
-            page = _get(http, it["url"]).text
-            m = re.search(
-                r'<meta[^>]+(?:name|property)=["\'](?:og:)?description["\'][^>]+content=["\']([^"\']+)',
-                page,
-                re.I,
-            )
-            it["excerpt"] = clean(m.group(1)) if m else ""
-            og = _OG_IMAGE.search(page)
-            if og:
-                it["image"] = urljoin(it["url"], html.unescape(og.group(1)))
+            page = _get(http, it["url"])
+            metadata = {}
+            for tag in BeautifulSoup(page.text, "html.parser").find_all("meta"):
+                key = tag.get("property") or tag.get("name")
+                if key and (content := tag.get("content")):
+                    metadata.setdefault(key.lower(), content)
+            it["excerpt"] = clean(metadata.get("og:description") or metadata.get("description"))
+            image = metadata.get("og:image") or metadata.get("twitter:image")
+            if image:
+                it["image"] = urljoin(str(page.url), image)
         except httpx.HTTPError:
             pass
     return out
