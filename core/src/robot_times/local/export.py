@@ -30,7 +30,11 @@ def _lit(v: Any) -> str:
         return "null"
     if isinstance(v, int | float):
         return repr(v)
-    return "'" + str(v).replace("'", "''") + "'"
+    value = str(v)
+    if "\x00" in value:
+        # SQL scripts cannot contain literal null bytes, but SQLite can store them in text.
+        return f"cast(x'{value.encode('utf-8').hex()}' as text)"
+    return "'" + value.replace("'", "''") + "'"
 
 
 def export_sql(store: Store) -> str:

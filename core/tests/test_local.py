@@ -373,6 +373,20 @@ def test_export_sql_round_trips_into_a_fresh_database():
     assert repo.load_settings(fresh)["zoteroCollection"] == "Inbox"
 
 
+def test_export_sql_round_trips_notes_containing_null_characters():
+    from robot_times.local.export import export_sql
+
+    source, _ = make_api()
+    paper(source.store)
+    note = "第一行\nIt's a robot\x00第二行"
+    assert call(source, "PUT", "/api/notes/2610.00001", {"note": note})[0] == 200
+    sql = export_sql(source.store)
+
+    target = SqliteStore()
+    target.db.executescript(sql)
+    assert target.rows("select note from notes") == [{"note": note}]
+
+
 def test_stop_shuts_down_the_dashboard(server):
     from robot_times.local.server import is_running, stop
 
