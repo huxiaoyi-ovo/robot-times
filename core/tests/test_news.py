@@ -106,6 +106,33 @@ def test_fetch_all_parses_every_kind_and_isolates_failures():
     assert by["blocked"]["blocked"] and not by["blocked"]["ok"]
 
 
+def test_html_articles_are_resolved_against_the_redirected_listing():
+    source = {
+        "id": "listed",
+        "name": "Listed",
+        "url": "https://example.test/old/archive",
+        "kind": "html",
+        "type": "deep",
+        "pattern": r"https://example\.test/new/robotic-grasping$",
+    }
+
+    def listing(request):
+        if request.url.path == "/old/archive":
+            return httpx.Response(302, headers={"Location": "/new/archive"})
+        if request.url.path == "/new/archive":
+            return httpx.Response(200, text='<a href="./robotic-grasping">Robotic grasping</a>')
+        if request.url.path == "/new/robotic-grasping":
+            return httpx.Response(
+                200, text='<meta name="description" content="A grasping method.">'
+            )
+        return httpx.Response(404)
+
+    items, health = fetch_all([source], now=NOW, transport=httpx.MockTransport(listing))
+    assert health[0]["ok"]
+    assert [item["url"] for item in items] == ["https://example.test/new/robotic-grasping"]
+    assert items[0]["excerpt"] == "A grasping method."
+
+
 def test_blocked_feed_read_from_worker_cache():
     from robot_times.cloud import repo
     from robot_times.news.digest import feed_cache
@@ -220,6 +247,25 @@ def test_news_scores_only_apply_to_valid_batch_indices():
     ]
     out = judge(MalformedIndices(), items, "news", "", [])
     assert [(item["id"], item["score"]) for item in out] == [("0", 6.0)]
+
+
+def test_news_rejects_non_boolean_keep_and_non_finite_scores():
+    from robot_times.news.digest import judge
+
+    class InvalidDecisions:
+        def complete(self, prompt, **kw):
+            return json.dumps({"items": [
+                {"i": 0, "keep": "false", "score": 9},
+                {"i": 1, "keep": True, "score": "NaN"},
+                {"i": 2, "keep": True, "score": "Infinity"},
+                {"i": 3, "keep": True, "score": 7.5},
+            ]})  # fmt: skip
+
+    items = [
+        {"id": str(i), "title": f"Article {i}", "excerpt": "", "source": "test"} for i in range(4)
+    ]
+    out = judge(InvalidDecisions(), items, "news", "", [])
+    assert [(item["id"], item["score"]) for item in out] == [("1", 0.0), ("2", 0.0), ("3", 7.5)]
 
 
 def test_merge_events_keeps_first_report_of_each_event():

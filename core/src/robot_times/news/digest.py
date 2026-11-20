@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -163,12 +164,13 @@ def _llm_batch(
             it = batch[int(index)]
         except (ValueError, IndexError):
             continue
-        if not r.get("keep"):
+        if r.get("keep") is not True:
             continue
         try:
-            score = max(0.0, min(10.0, float(r.get("score", 0))))
-        except (TypeError, ValueError):
+            score = float(r.get("score", 0))
+        except (TypeError, ValueError, OverflowError):
             score = 0.0
+        score = max(0.0, min(10.0, score)) if math.isfinite(score) else 0.0
         cat = r.get("category")
         if cat not in categories:
             cat = preset["news_fallback"][1]

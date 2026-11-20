@@ -371,6 +371,80 @@ def test_daily_rerun_same_day_keeps_picks_next_day_skips_them():
     ]
 
 
+def test_failed_daily_publication_keeps_candidates_available_next_day(monkeypatch):
+    store = SqliteStore()
+    candidate = candidates()[0]
+    d, _ = deps(store, papers=[candidate])
+    next_day = date(2026, 10, 20)
+
+    def unavailable(*args):
+        raise RuntimeError("edition save failed")
+
+    with monkeypatch.context() as m:
+        m.setattr(repo, "save_day", unavailable)
+        with pytest.raises(RuntimeError, match="edition save failed"):
+            run_daily(d, SETTINGS, MONDAY)
+
+    assert repo.papers_by_ids(store, [candidate.id])
+    assert repo.get_json(store, "seen") is None
+    assert repo.days_between(store, MONDAY.isoformat(), next_day.isoformat()) == []
+    published = run_daily(d, SETTINGS, next_day)
+    assert published["picks"] == [candidate.id]
+    assert repo.get_json(store, "seen") == {candidate.id: next_day.isoformat()}
+
+    repo.set_json(store, "seen", {})
+    assert repo.known_paper_ids(store, before="2026-10-21") == {candidate.id}
+
+
+def test_daily_recovers_existing_seen_marks_when_the_edition_was_never_saved():
+    store = SqliteStore()
+    candidate = candidates()[0]
+    repo.set_json(store, "seen", {candidate.id: MONDAY.isoformat()})
+    next_day = date(2026, 10, 20)
+    d, _ = deps(store, papers=[candidate])
+
+    assert run_daily(d, SETTINGS, next_day)["picks"] == [candidate.id]
+    assert repo.get_json(store, "seen") == {candidate.id: next_day.isoformat()}
+
+
+def test_daily_reports_success_when_seen_write_fails_after_publication(monkeypatch):
+    store = SqliteStore()
+    candidate = candidates()[0]
+    d, _ = deps(store, papers=[candidate])
+    original = repo.set_json
+
+    def write_config(store, key, value):
+        if key == "seen":
+            raise RuntimeError("seen write failed")
+        original(store, key, value)
+
+    with monkeypatch.context() as m:
+        m.setattr(repo, "set_json", write_config)
+        published = run_daily(d, SETTINGS, MONDAY)
+
+    assert published["picks"] == [candidate.id]
+    assert repo.days_between(store, MONDAY.isoformat(), MONDAY.isoformat()) == [published]
+    assert run_daily(d, SETTINGS, date(2026, 10, 20))["skipped"]
+
+
+def test_imported_papers_keep_published_picks_out_of_future_recommendations():
+    from robot_times.local.export import export_sql
+
+    source, target = SqliteStore(), SqliteStore()
+    published, unpublished = candidates()[:2]
+    for paper in (published, unpublished):
+        repo.upsert_paper(
+            source, {"id": paper.id, "addedOn": MONDAY.isoformat(), "scores": {"total": 7}}
+        )
+    repo.save_day(source, {"date": MONDAY.isoformat(), "picks": [published.id]})
+    target.db.executescript(export_sql(source))
+
+    assert repo.known_paper_ids(target) == {published.id, unpublished.id}
+    assert repo.known_paper_ids(target, before="2026-10-20") == {published.id}
+    d, _ = deps(target, papers=[published, unpublished])
+    assert run_daily(d, SETTINGS, date(2026, 10, 20))["picks"] == [unpublished.id]
+
+
 def test_daily_survives_hf_and_llm_failures():
     class BrokenLLM:
         def complete(self, prompt, **kw):

@@ -33,6 +33,10 @@ class ZoteroError(RuntimeError):
     pass
 
 
+class ZoteroLibraryUnavailable(ZoteroError):
+    """The local Zotero connection failed while reading the library."""
+
+
 class ZoteroLocalClient:
     def __init__(
         self,
@@ -114,7 +118,15 @@ class ZoteroLocalClient:
         params: dict[str, Any] = {"format": "json"}
         if limit:
             params["limit"] = limit
-        resp = self._http.get(self._url(f"{USER}/items/top"), params=params)
+        try:
+            resp = self._http.get(self._url(f"{USER}/items/top"), params=params)
+        except (httpx.NetworkError, httpx.TimeoutException, httpx.RemoteProtocolError) as error:
+            raise ZoteroLibraryUnavailable(
+                L(
+                    "连不上 Zotero：请确认 Zotero 已经打开。",
+                    "Can't reach Zotero: make sure Zotero is open.",
+                )
+            ) from error
         self._check(resp, L("读取文献库", "Reading the library"))
         self._remember_server_id(resp)
         return [
