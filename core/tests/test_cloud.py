@@ -194,6 +194,24 @@ def test_hf_upvotes_skips_bad_days_but_fails_if_all_bad():
         hf_upvotes([date(2026, 10, 26)], transport=t)
 
 
+def test_hf_upvotes_keeps_valid_rows_alongside_malformed_rows():
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=[
+                {"paper": {"id": "2610.00001", "upvotes": 9}},
+                {"paper": None},
+                {"paper": {"id": "2610.00002", "upvotes": "missing"}},
+                {"paper": {"id": None, "upvotes": 100}},
+                {"paper": {"id": "2610.00003", "upvotes": 4}},
+            ],
+        )
+
+    assert hf_upvotes([date(2026, 10, 25)], transport=httpx.MockTransport(handler)) == {
+        "2610.00001": 9, "2610.00003": 4,
+    }  # fmt: skip
+
+
 def test_daily_records_problems_when_hf_down():
     def down(days):
         raise RuntimeError("HTTP 503")
