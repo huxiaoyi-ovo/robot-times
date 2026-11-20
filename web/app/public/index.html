@@ -2450,13 +2450,30 @@ async function addZotero(id){
   }catch(e){ toast(e); }
   finally{ zBusy=false; if(S.open===id) refreshReader(); else render(); }
 }
-async function sendFeedback(id, action, quiet){
+const feedbackWrites=new Map();
+function sendFeedback(id, action, quiet){
   const prev=S.feedback[id];
   const next = prev===action && !quiet ? "clear" : action;
-  S.feedback[id] = next==="clear" ? undefined : next; if(S.open===id) refreshReader();
-  try{ await api(`/api/feedback/${encodeURIComponent(id)}`,{method:"POST", body:JSON.stringify({action:next})});
-    if(!quiet && next!=="clear") toast(next==="like"?t("记下了，之后多推这类论文"):t("记下了，之后少推这类论文")); }
-  catch(e){ S.feedback[id]=prev; if(S.open===id) refreshReader(); toast(e); }
+  const value=next==="clear" ? undefined : next;
+  const write=feedbackWrites.get(id)||{saved:prev, chain:Promise.resolve()};
+  const edit=Symbol(); write.latest=edit;
+  feedbackWrites.set(id,write);
+  S.feedback[id]=value; if(S.open===id) refreshReader();
+  write.chain=write.chain.then(async()=>{
+    try{
+      await api(`/api/feedback/${encodeURIComponent(id)}`,{method:"POST", body:JSON.stringify({action:next})});
+      write.saved=value;
+      if(write.latest===edit && !quiet && next!=="clear") toast(next==="like"?t("记下了，之后多推这类论文"):t("记下了，之后少推这类论文"));
+    }catch(e){
+      if(write.latest===edit) toast(e);
+    }finally{
+      if(write.latest===edit){
+        S.feedback[id]=write.saved; feedbackWrites.delete(id);
+        if(S.open===id) refreshReader();
+      }
+    }
+  });
+  return write.chain;
 }
 
 /* ---------- 问 AI ---------- */
