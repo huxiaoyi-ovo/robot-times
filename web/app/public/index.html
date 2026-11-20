@@ -2540,19 +2540,22 @@ function showJob(){
   el.innerHTML=`<span class="dot" aria-hidden="true"></span><span>${t("正在生成{x}",{x:esc(now)})}${next.length?t("，之后是{y}",{y:esc(next.join(t("、")))}):""}${t("……{eta}，好了会自动显示，不用刷新。",{eta})}</span>`;
   el.hidden=false;
 }
-let jobTimer=null;
+let jobTimer=null, jobPolling=false;
 function watchJob(){
   if(jobTimer||!(isLocal()||S.features.run)) return;
   jobTimer=setInterval(async()=>{
+    if(jobPolling) return;
+    jobPolling=true;
     try{
       const j=await api("/api/job"), was=S.job; S.job=j; showJob();
       if(jobBusy(j)) return;
-      clearInterval(jobTimer); jobTimer=null;
       await loadAll(); render();
+      if(!jobBusy(S.job)){ clearInterval(jobTimer); jobTimer=null; }
       const last=j.last;
       if(last && jobBusy(was) && last.ok) toast(t("生成好了")+(last.message?t("：")+last.message:""));  // 失败的在上面的提示条里
       showJob();
     }catch{}
+    finally{ jobPolling=false; }
   }, isLocal() ? 4000 : 20000);
 }
 
