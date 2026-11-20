@@ -154,3 +154,21 @@ def test_rss_fallback_respects_fetch_limit():
         papers = fetch_recent(["cs.RO"], max_results=1, sleep=lambda s: None, api=api, http=http)
 
     assert [p.id for p in papers] == ["2610.33172"]
+
+
+def test_unexpected_empty_page_retries_then_falls_back_to_rss():
+    import arxiv
+    import httpx
+
+    calls, waits = [], []
+
+    def api(*a, **k):
+        calls.append(1)
+        raise arxiv.UnexpectedEmptyPageError("https://export.arxiv.org/api/query", 3, None)
+
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, text=RSS))
+    with httpx.Client(transport=transport) as http:
+        papers = fetch_recent(["cs.RO"], sleep=waits.append, api=api, http=http)
+
+    assert len(calls) == 3 and waits == [30, 90]
+    assert [p.id for p in papers] == ["2610.33172"]
