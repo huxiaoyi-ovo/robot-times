@@ -27,6 +27,11 @@ def _titles(ps: list[dict], lang: str = "zh") -> str:
     return "；".join(f"《{p['title']}》" for p in ps) or "（无）"
 
 
+def _text(value: object) -> str:
+    """大模型偶尔把该是一句话的字段写成列表或对象；只收字符串，不然看板上会显示成 [object Object]。"""
+    return value.strip() if isinstance(value, str) else ""
+
+
 MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
 
@@ -114,13 +119,18 @@ def run_weekly(
     raw_trends = review.get("trends")
     if isinstance(raw_trends, list):
         for trend in raw_trends:
-            if not isinstance(trend, dict) or not trend.get("title"):
+            if not isinstance(trend, dict) or not _text(trend.get("title")):
                 continue
             paper_ids = trend.get("paperIds")
             if not isinstance(paper_ids, list):
                 paper_ids = []
             trends.append(
-                {**trend, "paperIds": [i for i in paper_ids if isinstance(i, str) and i in valid]}
+                {
+                    **trend,
+                    "title": _text(trend.get("title")),
+                    **({"body": _text(trend["body"])} if "body" in trend else {}),
+                    "paperIds": [i for i in paper_ids if isinstance(i, str) and i in valid],
+                }
             )
 
     next_monday = monday + timedelta(days=7)
@@ -133,13 +143,13 @@ def run_weekly(
         "start": monday.isoformat(),
         "end": sunday.isoformat(),
         "range": f"{_md(monday, lang)}–{_md(sunday, lang)}",
-        "headline": review.get("headline")
+        "headline": _text(review.get("headline"))
         or (
             f"{len(ordered)} papers recommended this week, {len(done)} finished"
             if lang == "en"
             else f"本周推荐 {len(ordered)} 篇，读完 {len(done)} 篇"
         ),
-        "summary": review.get("summary", ""),
+        "summary": _text(review.get("summary")),
         "trends": trends,
         "picks": [p["id"] for p in ordered[:8]],
         "stats": {"recommended": len(ordered), "done": len(done), "days": len(days)},
