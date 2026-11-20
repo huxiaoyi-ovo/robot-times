@@ -179,6 +179,11 @@ def analyze(
         max_tokens=32000,
     )
     data = parse_json_object(raw)
+    review = data.get("review")
+    if not isinstance(review, str) or not review.strip():
+        raise ValueError(
+            "The model did not return a paper review" if en else "模型没有返回解读正文"
+        )
     by_id = {f.id: f for f in ft.figures} if ft else {}
     figures = []
     for pick in data.get("figures") or []:
@@ -187,7 +192,7 @@ def analyze(
         f = by_id.get(str(pick.get("id", "")).strip("[] "))
         if f and all(x["id"] != f.id for x in figures):
             figures.append({**f.to_dict(), "note": _text(pick.get("note"), 400)})
-    review = _text(data.get("review"), 4000 if en else 2000)  # 英文同样的内容字符数多一倍
+    review = _text(review, 4000 if en else 2000)  # 英文同样的内容字符数多一倍
     analysis: dict[str, Any] = {"review": review, "figures": figures[:2]}
     analysis["source"] = "full" if ft else "abstract"
     cover = _cover(ft)

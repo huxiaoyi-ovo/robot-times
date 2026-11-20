@@ -159,6 +159,23 @@ def test_analyze_papers_reports_failures():
     assert "解读没写成" in problems[0]
 
 
+def test_analyze_retries_empty_review_without_marking_it_complete():
+    class Incomplete(FakeLLM):
+        def complete(self, prompt, **kw):
+            if not self.prompts:
+                self.prompts.append(prompt)
+                return json.dumps({"title_zh": "有标题但没有解读", "review": "  "})
+            return super().complete(prompt, **kw)
+
+    store, llm = SqliteStore(), Incomplete()
+    record = {**REC, "source": "openreview", "analysis": {"review": "", "source": "abstract"}}
+    assert analyze_papers(store, llm, [record], "", None) == 1
+    assert len(llm.prompts) == 2
+    assert (
+        repo.papers_by_ids(store, [record["id"]])[record["id"]]["analysis"]["review"] == "一段评论"
+    )
+
+
 def test_parse_json_object_repairs_unescaped_quotes():
     from robot_times.llm.rerank import parse_json_object
 
