@@ -90,23 +90,26 @@ def day_plan(
 def week_plan(
     monday: date, minutes: int, deep_ids: list[str], abstract_ids: list[str], lang: str = "zh"
 ) -> list[dict]:
-    """下周计划：每天 10 分钟扫早报；两篇精读各分两天；周六回看、周日读周报。"""
+    """下周计划：工作日最多 10 分钟扫早报；两篇精读各分两天；周六回看、周日读周报。"""
     t = _t(lang)
     deep_ids = deep_ids[:2]
     abs_ids = list(abstract_ids)
-    body = max(10, minutes - 20)
+    short_block = min(10, minutes // 3)
+    body = minutes - 2 * short_block
     days: list[dict] = []
     deep_days = {0: (0, t["first"]), 2: (0, t["second"]), 3: (1, t["first"]), 4: (1, t["second"])}
     for i in range(7):
         d = monday + timedelta(days=i)
         label = f"{t['weekdays'][i]} {d.month}/{d.day}"
         if i == 5:
-            items = [{"minutes": 30, "mode": "review", "paperIds": [],
+            items = [{"minutes": min(30, minutes), "mode": "review", "paperIds": [],
                       "task": t["sat"]}]  # fmt: skip
         elif i == 6:
-            items = [{"minutes": 15, "mode": "review", "paperIds": [], "task": t["sun"]}]
+            items = [
+                {"minutes": min(15, minutes), "mode": "review", "paperIds": [], "task": t["sun"]}
+            ]
         else:
-            items = [{"minutes": 10, "mode": "scan", "paperIds": [], "task": t["w_scan"]}]
+            items = [{"minutes": short_block, "mode": "scan", "paperIds": [], "task": t["w_scan"]}]
             if i in deep_days and deep_days[i][0] < len(deep_ids):
                 idx, which = deep_days[i]
                 items.append({"minutes": body, "mode": "deep", "paperIds": [deep_ids[idx]],
@@ -115,6 +118,8 @@ def week_plan(
                 picks, abs_ids = abs_ids[:3], abs_ids[3:]
                 items.append({"minutes": body, "mode": "abstract", "paperIds": picks,
                               "task": t["w_abs"] if picks else t["w_catch"]})  # fmt: skip
-            items.append({"minutes": 10, "mode": "note", "paperIds": [], "task": t["w_note"]})
+            items.append(
+                {"minutes": short_block, "mode": "note", "paperIds": [], "task": t["w_note"]}
+            )
         days.append({"day": label, "items": items})
     return days
