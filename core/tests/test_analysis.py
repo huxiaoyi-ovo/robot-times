@@ -48,6 +48,24 @@ def test_parse_sections_figures_and_tables():
     assert parse("<html><body>no article</body></html>", URL) is None
 
 
+def test_html_keeps_research_contributions_and_reference_trajectories():
+    extra = """
+    <section class="ltx_section"><h2>3 Main Contributions</h2>
+    <p>Our controller reuses the contact schedule to reduce replanning time and maintain motion across footholds.</p></section>
+    <section class="ltx_section"><h2>4 Reference Trajectory Generation</h2>
+    <p>The reference trajectory passes through the stance waypoints in phase order and is interpolated with a cubic spline.</p></section>
+    <section class="ltx_section"><h2>Authors’ Contributions</h2>
+    <p>The first author performed and reviewed all of the experiments, wrote the manuscript, and prepared the figures.</p></section>
+    """
+    ft = parse(PAGE.replace("</article>", f"{extra}</article>"), URL)
+    assert [title for title, _ in ft.sections] == [
+        "1 Introduction",
+        "2 Experiments",
+        "3 Main Contributions",
+        "4 Reference Trajectory Generation",
+    ]
+
+
 def test_text_budget_keeps_start_of_every_section():
     ft = FullText(URL, [("A", "a " * 5000), ("B", "b " * 50)], [])
     text = ft.text(budget=2000)
