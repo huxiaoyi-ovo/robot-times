@@ -41,6 +41,14 @@ HISTORY = 20  # 记住最近多少次任务结果
 # 报错可能是中文也可能是英文（看设置的语言），正则两种都要认；标题和办法按当前语言给。
 RULES: list[tuple[str, tuple[str, str], tuple[str, str], list[str]]] = [
     (
+        r"Zotero 读取文献库超时|Zotero library timed out",
+        ("Zotero 响应太慢", "Zotero is responding too slowly"),
+        ("Zotero 开着，但读文献库超时了（库很大或 Zotero 正忙）。等 Zotero 空闲后点“重试”；一直这样就重启 Zotero。",
+         "Zotero is open, but reading the library timed out (a large library, or Zotero is busy). "
+         "Click “Retry” once Zotero is idle; if it keeps happening, restart Zotero."),
+        ["retry", "doctor"],
+    ),
+    (
         r"连不上 Zotero|localhost:23119|Zotero 已经打开|ConnectError.*23119|reach Zotero|Zotero is open",
         ("连不上 Zotero", "Can't reach Zotero"),
         ("打开 Zotero 后点“重试”。Zotero 开着还不行，就去设置引导里检查“允许本机程序访问”。",

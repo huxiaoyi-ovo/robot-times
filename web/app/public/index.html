@@ -2294,17 +2294,21 @@ let aiCtl=null, aiText="", absLang="zh", closeTimer=null;
 const motionOK = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
 const paras = t => String(t||"").split(/\n\s*\n|\n/).map(x=>x.trim()).filter(Boolean).map(x=>`<p>${esc(x)}</p>`).join("");
 const full = {}; // 打开过的论文的完整数据（带解读）
-const detailPending = new Set();
+const detailPending = new Set(), detailFailedAt = new Map();
+const DETAIL_RETRY_MS = 30e3; // 详情没载入时，重新渲染不会马上再请求；重新打开论文会立刻重试
 const readerPaper = id => full[id]&&S.papers[id] ? {...full[id], ...S.papers[id]} : S.papers[id];
-async function loadReaderDetails(id){
+async function loadReaderDetails(id, retry=false){
   const paper=S.papers[id], cached=full[id];
   // 列表仅在省略了摘要译文或解读时附带 hasAnalysis，可能为 false。
   if(paper?.hasAnalysis==null || (cached && (!paper.hasAnalysis || cached.analysis)) || detailPending.has(id)) return;
+  if(!retry && Date.now()-(detailFailedAt.get(id)??-Infinity)<DETAIL_RETRY_MS) return;
   detailPending.add(id);
   try{
     full[id]=await api(`/api/paper/${encodeURIComponent(id)}`);
+    detailFailedAt.delete(id);
     if(S.open===id) refreshAnalysis(id);
   }catch(e){
+    detailFailedAt.set(id, Date.now());
     const box=S.open===id&&$("#analysis");
     if(box) box.innerHTML=`<p class="warn">${t("论文详情没载入：")}${esc(e.message)}</p>`;
   }finally{
@@ -2422,7 +2426,7 @@ function openReader(id, focus, dir=1){
   if(focus==="note"){ const ta=$("#note-ta"); setTimeout(()=>{ ta.scrollIntoView({block:"center", behavior:smooth()}); ta.focus({preventScroll:true}); }, fresh?420:0); }
   else r.querySelector("[data-close].ibtn").focus({preventScroll:true});
   if(S.zotero[id]) checkZotero(id);
-  loadReaderDetails(id);
+  loadReaderDetails(id, true);
 }
 function refreshAnalysis(id){
   const p=readerPaper(id), box=$("#analysis"); if(!p||!box) return;
