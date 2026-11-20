@@ -252,6 +252,15 @@ def test_week_plan_shape():
     assert plan[1]["items"][1]["paperIds"] == ["a0", "a1", "a2"]
 
 
+def test_week_plan_respects_short_daily_budgets():
+    for minutes in (15, 20, 25, 60):
+        plan = week_plan(date(2026, 10, 26), minutes, ["d"], ["a"])
+        totals = [sum(item["minutes"] for item in day["items"]) for day in plan]
+        assert totals[:5] == [minutes] * 5
+        assert totals[5:] == [min(30, minutes), 15]
+        assert all(item["minutes"] > 0 for day in plan for item in day["items"])
+
+
 # ---------------- 每日、每周任务 ----------------
 
 
