@@ -156,9 +156,12 @@ def _llm_batch(
     results = parse_json_array(llm.complete(prompt, json_mode=True, **kw))
     out = []
     for r in results:
+        index = str(r.get("i"))
+        if not index.isdecimal():
+            continue
         try:
-            it = batch[int(r.get("i"))]
-        except (TypeError, ValueError, IndexError):
+            it = batch[int(index)]
+        except (ValueError, IndexError):
             continue
         if not r.get("keep"):
             continue
