@@ -909,6 +909,7 @@ const EN = {
   "笔记":"Notes",
   "今日":"Today",
   "业界":"Industry",
+  "业界简报没载入":"The industry brief didn't load",
   "本周":"This week",
   "论文库":"Library",
   "设置":"Settings",
@@ -1652,16 +1653,35 @@ function industryBand(part){
     ${row.length?`<div class="row3">${row.map(it=>`<article><p class="tk">${esc(it.category||"")}</p>${head(it)}${mline(src(it))}</article>`).join("")}</div>`:""}
   </section>`;
 }
+const newsPending=new Set(), newsErrors=new Map();
 async function loadNews(date){
-  if(S.newsCache[date]) return S.newsCache[date];
-  const d=await api(`/api/news/${date}`); S.newsCache[date]=d; return d;
+  if(S.newsCache[date]||newsPending.has(date)) return;
+  newsPending.add(date); newsErrors.delete(date);
+  try{ S.newsCache[date]=await api(`/api/news/${encodeURIComponent(date)}`); }
+  catch(e){ newsErrors.set(date,e.message); }
+  finally{
+    newsPending.delete(date);
+    if(S.tab==="news"&&date===S.newsDates[Math.min(S.newsIdx,S.newsDates.length-1)]) render();
+  }
 }
 function viewNews(){
   if(!S.newsDates.length) return emptyBox(t("还没有业界简报"),(isLocal()?t("电脑开着时每天早上 8 点以后自动生成："):t("每天早上 8:20 左右（北京时间）自动生成："))+t("从和你方向有关的行业媒体、公司博客、AIHOT、Hacker News，以及 Substack 等深度文章里挑出今天值得看的，配中文标题和摘要。")+(isLocal()?"":t("第一次可以去 GitHub 仓库的 Actions → news → Run workflow 手动生成。")));
   const date=S.newsDates[Math.min(S.newsIdx,S.newsDates.length-1)];
   const n=S.newsCache[date];
-  if(!n){ loadNews(date).then(()=>{ if(S.tab==="news") render(); }).catch(e=>toast(e)); return `<p class="mute">${t("载入中…")}</p>`; }
   const older=S.newsIdx<S.newsDates.length-1, newer=S.newsIdx>0;
+  const stats=n?t("从 {c} 条里选出深度 {d} 篇、快讯 {n} 条",{c:n.stats?.candidates??"?",d:(n.deep||[]).length,n:(n.news||[]).length}):"";
+  const heading=`<header class="secfront">
+      <h1 class="sec-title">${t("业界")}</h1>
+      <p class="sec-dek">${t("和你方向有关的行业每天发生了什么。深度长文放在前面，快讯按类别排；标题和摘要由大模型根据原文写成，数字请以原文为准。")}</p>
+      <p class="pager-s wide"><button data-nday="1" ${older?"":"disabled"} aria-label="${t("前一天")}">‹</button><span>${esc(longDate(date).replace("　"," "))}${stats?`　${stats}`:""}</span><button data-nday="-1" ${newer?"":"disabled"} aria-label="${t("后一天")}">›</button></p>
+    </header>`;
+  if(!n){
+    const error=newsErrors.get(date);
+    if(error) return heading+emptyBox(t("业界简报没载入"),esc(error),true)
+      +`<div class="actions"><button class="btn" data-news-retry="${esc(date)}">${t("重试")}</button></div>`;
+    loadNews(date);
+    return heading+`<p class="mute">${t("载入中…")}</p>`;
+  }
   const cats=[...new Set([...NEWS_CATS,...(n.news||[]).map(it=>it.category)])];
   const groups=cats.map(c=>[c,(n.news||[]).filter(it=>it.category===c)]).filter(([,xs])=>xs.length);
   const ok=(n.sources||[]).filter(x=>x.ok), bad=(n.sources||[]).filter(x=>!x.ok);
@@ -1679,11 +1699,7 @@ function viewNews(){
   const img=(it,cls)=>it.image?`<a class="${cls}" href="${esc(it.url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true"><img src="${esc(it.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></a>`:"";
   const orig=it=>it.title&&it.title!==it.titleZh&&it.lang!=="zh"?`<p class="orig2">${esc(it.title)}</p>`:"";
   const flat=groups.flatMap(([c,xs])=>xs.map(it=>[c,it]));
-  return `<header class="secfront">
-      <h1 class="sec-title">${t("业界")}</h1>
-      <p class="sec-dek">${t("和你方向有关的行业每天发生了什么。深度长文放在前面，快讯按类别排；标题和摘要由大模型根据原文写成，数字请以原文为准。")}</p>
-      <p class="pager-s wide"><button data-nday="1" ${older?"":"disabled"} aria-label="${t("前一天")}">‹</button><span>${esc(longDate(date).replace("　"," "))}　${t("从 {c} 条里选出深度 {d} 篇、快讯 {n} 条",{c:n.stats?.candidates??"?",d:deeps.length,n:(n.news||[]).length})}</span><button data-nday="-1" ${newer?"":"disabled"} aria-label="${t("后一天")}">›</button></p>
-    </header>
+  return `${heading}
     ${dlead?`<section class="sect deep-sect">
       <div class="sect-h"><h2>${t("深度")}</h2><span class="cnt">${t("分析机构、投资人和研究者的长文")}</span></div>
       <article class="dlead${dlead.image?"":" noimg"}">
@@ -2573,6 +2589,7 @@ document.addEventListener("click", e=>{
   if(d.jump){ const el=document.getElementById(d.jump); if(el) window.scrollTo({top:el.getBoundingClientRect().top+scrollY-64, behavior:smooth()}); return; }
   if(d.day){ S.dayIdx=Math.max(0,Math.min(S.days.length-1,S.dayIdx+ +d.day)); render(); return; }
   if(d.nday){ S.newsIdx=Math.max(0,Math.min(S.newsDates.length-1,S.newsIdx+ +d.nday)); render(); return; }
+  if(d.newsRetry&&S.newsDates.includes(d.newsRetry)){ loadNews(d.newsRetry); render(); return; }
   if(d.week){ S.weekIdx=Math.max(0,Math.min(S.weeks.length-1,S.weekIdx+ +d.week)); render(); return; }
   if(d.toggle){ setStatus(d.toggle, statusOf(d.toggle)==="done"?"todo":"done"); return; }
   if(d.setst){ setStatus(d.setst, d.v); return; }
