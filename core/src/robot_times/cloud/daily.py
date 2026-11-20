@@ -36,6 +36,7 @@ class DailyDeps:
     hf_upvotes: Callable[[list[date]], dict[str, int]] | None = None
     llm: LLMClient | None = None
     html: Any = None  # arXiv HTML 版全文，需要 get(arxiv_id)；给了才写详细解读
+    fetch_limit: int | None = None
 
 
 DIVERSITY = 0.4  # 默认的多样性：同一方向的论文太多时，让位给其他方向（设置里可调）
@@ -232,16 +233,17 @@ def _run_daily(
     fetched = deps.fetch_papers(settings.get("categories") or preset["categories"], FETCH_DAYS)
     papers = fresh_candidates(store, fetched, day)
     log.info("arXiv 最近 %d 天 %d 篇，其中新候选 %d 篇", FETCH_DAYS, len(fetched), len(papers))
-    if len(fetched) >= FETCH_LIMIT:  # 按提交时间倒序抓，到上限就停：更早几天的论文根本没进候选
+    fetch_limit = FETCH_LIMIT if deps.fetch_limit is None else deps.fetch_limit
+    if fetched and len(fetched) >= fetch_limit:  # 按提交时间倒序抓，到上限就停
         oldest = min(p.published for p in fetched)
-        log.warning("arXiv 抓到上限 %d 篇，只覆盖到 %s", FETCH_LIMIT, oldest)
+        log.warning("arXiv 抓到上限 %d 篇，只覆盖到 %s", fetch_limit, oldest)
         problems.append(
             L(
                 "选的 arXiv 分类论文太多，抓到上限 {limit} 篇就停了，只看了 {oldest} 以后提交的；"
                 "在设置里少选几个分类，就能看全最近 {days} 天",
                 "The chosen arXiv categories have too many papers: fetching stopped at {limit}, so only papers "
                 "submitted after {oldest} were seen. Pick fewer categories in Settings to cover the last {days} days",
-            ).format(limit=FETCH_LIMIT, oldest=oldest, days=FETCH_DAYS)
+            ).format(limit=fetch_limit, oldest=oldest, days=FETCH_DAYS)
         )
     if not papers:
         # 节假日 arXiv 不发布：不生成空的一天，看板继续显示上一次的推荐

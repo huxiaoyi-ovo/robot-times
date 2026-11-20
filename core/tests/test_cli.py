@@ -1,6 +1,7 @@
 """命令行端到端测试：用假 Zotero 和假 arXiv 跑完整的 recommend → eval → push 流程。"""
 
 from datetime import date
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -142,6 +143,29 @@ def test_recommend_handles_arxiv_failure(env, monkeypatch):
     result = runner.invoke(cli.app, ["recommend"])
     assert result.exit_code == 1
     assert "从 arXiv 抓取失败" in result.output
+
+
+def test_cloud_daily_warns_at_its_configured_fetch_limit(env, monkeypatch):
+    from robot_times import signals
+    from robot_times.cloud import env as cloud_env
+    from robot_times.cloud.store import SqliteStore
+    from robot_times.zotero import web_api
+
+    store = SqliteStore()
+    monkeypatch.setattr(cloud_env, "store_from_env", lambda: store)
+    monkeypatch.setattr(cloud_env, "settings_fallback_from_env", lambda: {})
+    monkeypatch.setattr(cloud_env, "llm_from_env", lambda: None)
+    monkeypatch.setattr(signals, "hf_upvotes", lambda _days: {})
+    monkeypatch.setattr(
+        web_api, "ZoteroWebClient", lambda *_: SimpleNamespace(top_items=lambda: [])
+    )
+    monkeypatch.setattr(
+        arxiv_mod, "fetch_recent", lambda cats, days, max_results: PAPERS[:max_results]
+    )
+
+    result = runner.invoke(cli.app, ["cloud", "daily", "--day", "2026-10-25", "--max-results", "2"])
+    assert result.exit_code == 0, result.output
+    assert "抓到上限 2 篇" in result.output
 
 
 def test_recommend_with_llm_writes_chinese_summary(env, monkeypatch):

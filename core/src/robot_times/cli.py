@@ -243,7 +243,7 @@ def _logging(log_file: str = "") -> None:
 @cloud.command("daily")
 def cloud_daily(
     day: str = typer.Option("", help="按哪一天生成（YYYY-MM-DD），默认今天（北京时间）"),
-    max_results: int = typer.Option(2500, help="最多从 arXiv 拉多少篇（和 FETCH_LIMIT 一致）"),
+    max_results: int = typer.Option(2500, help="最多从 arXiv 拉多少篇"),
     if_missing: bool = typer.Option(
         False, help="今天 arXiv 发布之后已经生成过就跳过（备用的定时任务用，避免换掉正在读的推荐）"
     ),
@@ -281,6 +281,7 @@ def cloud_daily(
             os.environ.get("ROBOT_TIMES_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
         ),
         fetch_papers=lambda cats, days: fetch_recent(cats, days=days, max_results=max_results),
+        fetch_limit=max_results,
         hf_upvotes=hf_upvotes,
         llm=llm_from_env(),
         html=ArxivHtml(),
