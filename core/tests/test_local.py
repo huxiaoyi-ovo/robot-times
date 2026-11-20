@@ -304,6 +304,31 @@ def test_concurrent_starts_only_queue_one_job(monkeypatch):
     assert jobs.status()["queue"] == ["news"]
 
 
+def test_failed_retry_record_write_does_not_block_other_jobs(monkeypatch):
+    import sqlite3
+
+    calls = []
+    original = repo.set_json
+    failed = False
+
+    def set_json(store, key, value):
+        nonlocal failed
+        if key == "local_runs" and not failed:
+            failed = True
+            raise sqlite3.OperationalError("database is locked")
+        original(store, key, value)
+
+    monkeypatch.setattr(repo, "set_json", set_json)
+    jobs = Jobs(
+        SqliteStore(),
+        {"daily": lambda force: calls.append("daily"), "news": lambda force: calls.append("news")},
+        background=False,
+    )
+    status = jobs.auto()
+    assert calls == ["daily", "news"]
+    assert status["running"] is None and status["queue"] == []
+
+
 @pytest.fixture
 def server(tmp_path):
     (tmp_path / "index.html").write_text("<title>The Robot Times</title>", encoding="utf-8")
