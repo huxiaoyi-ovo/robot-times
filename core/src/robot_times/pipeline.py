@@ -21,12 +21,13 @@ LLM_CANDIDATES = 100  # 只把向量粗筛后的前 100 篇交给 LLM（要给�
 
 def _parse_added(item: dict[str, Any]) -> datetime | None:
     value = item.get("data", {}).get("dateAdded")
-    if not value:
+    if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        added = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    return added if added.tzinfo is not None else added.replace(tzinfo=UTC)
 
 
 def recommend(
