@@ -2171,13 +2171,15 @@ async function cityName(lat, lon){
   }catch{ return t("当前位置"); }
 }
 function wxPlace(v){ try{ if(v===undefined) return JSON.parse(localStorage.getItem("wx-place")||"null"); if(v) localStorage.setItem("wx-place",JSON.stringify(v)); else localStorage.removeItem("wx-place"); localStorage.removeItem("wx"); }catch{ return null; } }
+let wxForecastSeq=0;
 async function liveWeather(force){
+  const seq=++wxForecastSeq;
   const cached=wxCache();
   if(!force && cached && Date.now()-cached.at<30*60e3){ S.weather=cached.w; renderChrome(); return; }
   const place=wxPlace();
   const pos=place ? null : await locate();
   const at=place||pos;
-  if(!at) return; // 没有定位也没输入地点：用每天早上那份
+  if(!at||seq!==wxForecastSeq) return; // 没有当前地点：用每天早上那份
   try{
     const qs=new URLSearchParams({latitude:at.lat, longitude:at.lon, current:"temperature_2m,weather_code,is_day",
       daily:"temperature_2m_max,temperature_2m_min,precipitation_probability_max", timezone:"auto", forecast_days:"1"});
@@ -2189,6 +2191,7 @@ async function liveWeather(force){
     const w={live:true, code:c.weather_code, city: place ? place.name : await cityName(at.lat, at.lon), text, kind,
       temp:Math.round(c.temperature_2m), tmax:Math.round(d.daily.temperature_2m_max[0]), tmin:Math.round(d.daily.temperature_2m_min[0]),
       pop:d.daily.precipitation_probability_max?.[0]??null};
+    if(seq!==wxForecastSeq) return;
     S.weather=w; wxCache({at:Date.now(), w}); renderChrome();
   }catch(e){ /* 查不到就保留每天早上那份预报 */ }
 }
