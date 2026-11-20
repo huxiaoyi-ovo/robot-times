@@ -203,6 +203,25 @@ def test_preset_picks_news_sources_and_categories():
     assert out[0]["category"] in general["news_categories"] and out[0]["score"] == 6.0
 
 
+def test_news_scores_only_apply_to_valid_batch_indices():
+    from robot_times.news.digest import judge
+
+    class MalformedIndices:
+        def complete(self, prompt, **kw):
+            return json.dumps({"items": [
+                {"i": -1, "keep": True, "score": 10},
+                {"i": 0.6, "keep": True, "score": 9},
+                {"i": False, "keep": True, "score": 8},
+                {"i": "0", "keep": True, "score": 6},
+            ]})  # fmt: skip
+
+    items = [
+        {"id": str(i), "title": f"Article {i}", "excerpt": "", "source": "test"} for i in range(2)
+    ]
+    out = judge(MalformedIndices(), items, "news", "", [])
+    assert [(item["id"], item["score"]) for item in out] == [("0", 6.0)]
+
+
 def test_merge_events_keeps_first_report_of_each_event():
     # 标题去重挡不住同一件事的不同侧面：大模型分组后每组只留排在最前（最重要）的一条
     from robot_times.news.digest import merge_events
