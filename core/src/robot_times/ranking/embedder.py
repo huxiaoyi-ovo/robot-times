@@ -62,6 +62,8 @@ class SentenceTransformerEmbedder:
         self._model = SentenceTransformer(model_name)
 
     def encode(self, texts: list[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, self._model.get_sentence_embedding_dimension()), dtype=np.float32)
         vecs = self._model.encode(texts, batch_size=32, show_progress_bar=False)
         return _normalize(np.asarray(vecs, dtype=np.float32))
 
@@ -86,13 +88,18 @@ class FastEmbedEmbedder:
 
 
 def default_embedder(model_name: str = "BAAI/bge-small-en-v1.5") -> Embedder:
+    failure = None
     for cls in (SentenceTransformerEmbedder, FastEmbedEmbedder):
         try:
             return cls(model_name)
         except ImportError:
             continue
         except Exception as e:  # 模型下载失败等：当天照样出推荐，只是质量差一些
-            warnings.warn(f"向量模型加载失败（{e}），改用词袋向量。", stacklevel=2)
-            return HashingEmbedder()
-    warnings.warn("没有可用的向量模型，改用词袋向量，推荐质量会差一些。", stacklevel=2)
+            failure = e
+    message = (
+        f"向量模型加载失败（{failure}），改用词袋向量。"
+        if failure is not None
+        else "没有可用的向量模型，改用词袋向量，推荐质量会差一些。"
+    )
+    warnings.warn(message, stacklevel=2)
     return HashingEmbedder()

@@ -153,3 +153,37 @@ def test_default_embedder_falls_back_in_order(monkeypatch):
         warnings.simplefilter("always")
         assert isinstance(emb.default_embedder(), HashingEmbedder)
     assert "连不上" in str(w[0].message)
+
+
+def test_default_embedder_tries_onnx_after_optional_model_load_fails(monkeypatch):
+    from robot_times.ranking import embedder as emb
+
+    def broken(name):
+        raise OSError("PyTorch model failed to load")
+
+    onnx = HashingEmbedder(dim=8)
+    monkeypatch.setattr(emb, "SentenceTransformerEmbedder", broken)
+    monkeypatch.setattr(emb, "FastEmbedEmbedder", lambda name: onnx)
+    assert emb.default_embedder() is onnx
+
+
+def test_sentence_transformers_can_score_with_an_empty_library(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    from robot_times.ranking.embedder import SentenceTransformerEmbedder
+
+    class Model:
+        def get_sentence_embedding_dimension(self):
+            return 2
+
+        def encode(self, texts, **kwargs):
+            return [[3, 4] for _ in texts]
+
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=lambda _: Model())
+    )
+    cands = [paper("2610.00002", "Humanoid", "humanoid robot")]
+    model = SentenceTransformerEmbedder()
+    assert model.encode([]).shape == (0, 2)
+    assert recommend(cands, [], model, now=NOW)[0].paper == cands[0]
