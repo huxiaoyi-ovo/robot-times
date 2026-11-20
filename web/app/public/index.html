@@ -1706,13 +1706,15 @@ function viewWeek(){
   const w=S.weeks[Math.min(S.weekIdx,S.weeks.length-1)];
   const picks=(w.picks||[]).map(id=>S.papers[id]).filter(Boolean).sort(byScore);
   const st=w.stats||{};
-  S.order=picks.map(p=>p.id);
+  const visibleIds=ids=>(ids||[]).filter(id=>S.papers[id]);
+  const order=new Set((w.trends||[]).flatMap(trend=>visibleIds(trend.paperIds)));
   const older=S.weekIdx<S.weeks.length-1, newer=S.weekIdx>0;
   const rows=(w.nextWeek?.plan||[]).flatMap((d,i)=>{
     const [wd,md]=(d.day||"").split(" ");
     const items=(d.items||[]).filter(it=>it.mode!=="note"&&!(it.mode==="scan"&&i<5));
     return items.map((it,j)=>{
-      const ids=(it.paperIds||[]).filter(id=>S.papers[id]);
+      const ids=visibleIds(it.paperIds);
+      ids.forEach(id=>order.add(id));
       const kind = it.mode==="deep" && it.task ? it.task : modeName(it.mode);
       return `<tr class="${i>=5?"weekend":""}">
         ${j===0?`<td class="d" rowspan="${items.length}">${esc(wd||"")}<span>${esc(md||"")}</span></td>`:""}
@@ -1721,13 +1723,15 @@ function viewWeek(){
         <td class="m">${t("{n} 分钟",{n:+it.minutes})}</td></tr>`;
     });
   }).join("");
+  picks.forEach(p=>order.add(p.id));
+  S.order=[...order];
   return `<header class="secfront">
       <p class="pager-s wide"><button data-week="1" ${older?"":"disabled"} aria-label="${t("上一周")}">‹</button><span>${t("周报")}　${esc(w.range||w.week)}</span><button data-week="-1" ${newer?"":"disabled"} aria-label="${t("下一周")}">›</button></p>
       <h1 class="sec-title wk">${esc(w.headline||t("本周回顾"))}</h1>
       ${w.summary?`<p class="sec-dek">${esc(w.summary)}</p>`:""}
       <p class="mline">${t("本周推荐 {n} 篇",{n:st.recommended??0})}<i aria-hidden="true">·</i>${t("你读完 {n} 篇",{n:st.done??0})}</p>
     </header>
-    ${w.trends?.length?`<section class="sect"><div class="sect-h"><h2>${t("本周主题")}</h2></div><div class="row3 themes2">${w.trends.map(t=>`<article><h3 class="ht">${esc(t.title)}</h3><p class="psum">${esc(t.body)}</p><ul class="refs2">${(t.paperIds||[]).filter(id=>S.papers[id]).map(id=>`<li><button class="hit" data-open="${esc(id)}"><span class="ul">${esc(S.papers[id].title)}</span></button></li>`).join("")}</ul></article>`).join("")}</div></section>`:""}
+    ${w.trends?.length?`<section class="sect"><div class="sect-h"><h2>${t("本周主题")}</h2></div><div class="row3 themes2">${w.trends.map(t=>`<article><h3 class="ht">${esc(t.title)}</h3><p class="psum">${esc(t.body)}</p><ul class="refs2">${visibleIds(t.paperIds).map(id=>`<li><button class="hit" data-open="${esc(id)}"><span class="ul">${esc(S.papers[id].title)}</span></button></li>`).join("")}</ul></article>`).join("")}</div></section>`:""}
     ${rows?`<section class="sect"><div class="sect-h"><h2>${t("下周怎么读")}</h2><span class="cnt">${esc(venueText(w.nextWeek.range||"").replace(" 每天","，每天"))}</span></div>
       <table class="plan"><thead><tr><th>${t("日期")}</th><th class="k">${t("安排")}</th><th>${t("论文")}</th><th style="text-align:right">${t("时间")}</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="mline" style="margin-top:10px">${t("工作日每天另外留 10 分钟扫当天的新推荐、10 分钟写笔记")}</p></section>`:""}
