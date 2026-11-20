@@ -62,21 +62,26 @@ class ZoteroLocalClient:
     @property
     def server_id(self) -> str:
         if self._server_id is None:
-            resp = self._http.get(self._url(""))
-            self._check(resp, L("连接 Zotero", "Connecting to Zotero"))
-            self._remember_server_id(resp)
-            if self._server_id is None:
-                raise ZoteroError(
-                    L(
-                        "Zotero 没有返回 Zotero-Server-ID，请确认是 Zotero 10 及以上版本。",
-                        "Zotero didn't return a Zotero-Server-ID; make sure it's Zotero 10 or newer.",
-                    )
-                )
+            return self._fetch_server_id()
         return self._server_id
+
+    def _fetch_server_id(self) -> str:
+        resp = self._http.get(self._url(""))
+        self._check(resp, L("连接 Zotero", "Connecting to Zotero"))
+        server_id = resp.headers.get("Zotero-Server-ID")
+        if not server_id:
+            raise ZoteroError(
+                L(
+                    "Zotero 没有返回 Zotero-Server-ID，请确认是 Zotero 10 及以上版本。",
+                    "Zotero didn't return a Zotero-Server-ID; make sure it's Zotero 10 or newer.",
+                )
+            )
+        self._server_id = server_id
+        return server_id
 
     def ping(self) -> bool:
         try:
-            _ = self.server_id
+            self._fetch_server_id()
             return True
         except (httpx.HTTPError, ZoteroError):
             return False

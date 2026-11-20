@@ -31,6 +31,22 @@ def test_reads_library_and_caches_server_id():
     assert len(z.top_items()) == 1
 
 
+def test_ping_checks_live_zotero_even_after_caching_server_id():
+    server = {"id": "srv-1"}
+
+    def handle(request):
+        if server["id"] is None:
+            raise httpx.ConnectError("Zotero closed", request=request)
+        return httpx.Response(200, headers={"Zotero-Server-ID": server["id"]})
+
+    z = ZoteroLocalClient(transport=httpx.MockTransport(handle))
+    assert z.ping() and z.server_id == "srv-1"
+    server["id"] = None
+    assert not z.ping()
+    server["id"] = "srv-2"
+    assert z.ping() and z.server_id == "srv-2"
+
+
 def test_add_papers_creates_items_then_notes():
     fake = FakeZotero()
     z = client(fake)
