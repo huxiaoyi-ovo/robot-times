@@ -38,11 +38,13 @@ def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, text=ATOM)
     if host == "list.ex" and request.url.path.endswith("robostrategy-articles"):
         return httpx.Response(200, text=LISTING)
+    if host == "list.ex" and request.url.path == "/news/the-chatgpt-moment-for-robotics":
+        return httpx.Response(302, headers={"Location": "/articles/robotics/current"})
     if host == "list.ex":
         return httpx.Response(
             200,
-            text='<meta property="og:description" content="Adoption will be gradual.">'
-            '<meta property="og:image" content="https://list.ex/cover.png">',
+            text='<meta content="Adoption won\'t happen overnight." property="og:description">'
+            '<meta content="cover.png?v=1&amp;lang=en" property="og:image">',
         )
     if host == "aihot.news":
         assert request.headers["User-Agent"].startswith("aihot-api/2.0.0")
@@ -89,10 +91,11 @@ def test_fetch_all_parses_every_kind_and_isolates_failures():
     assert "The ChatGPT Moment for Robotics" in titles
     assert (
         next(it for it in items if it["sourceId"] == "list")["excerpt"]
-        == "Adoption will be gradual."
+        == "Adoption won't happen overnight."
     )
     assert (
-        next(it for it in items if it["sourceId"] == "list")["image"] == "https://list.ex/cover.png"
+        next(it for it in items if it["sourceId"] == "list")["image"]
+        == "https://list.ex/articles/robotics/cover.png?v=1&lang=en"
     )
     rss = next(it for it in items if it["sourceId"] == "rss")
     assert rss["image"] == "https://ex.com/img/figure.jpg"  # 正文里的第一张图，相对地址补全
