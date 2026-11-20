@@ -518,3 +518,50 @@ def test_oversized_pdf_is_not_downloaded_whole(monkeypatch):
         status, r = call(api, "POST", "/api/zotero/2610.00001")
         assert status == 200 and "40 MB" in r["pdfError"] and not z.uploaded
     assert len(sent) <= 11  # 超过上限就停，没有把 100 块都读完
+
+
+def test_server_rejects_bad_or_oversized_content_length(server):
+    import http.client
+
+    host, port = server.removeprefix("http://").split(":")
+    for length, expected in (("abc", 400), ("-5", 400), ("50000000", 413)):
+        conn = http.client.HTTPConnection(host, int(port), timeout=5)
+        conn.putrequest("PUT", "/api/notes/2610.00001")
+        conn.putheader("Content-Type", "application/json")
+        conn.putheader("Content-Length", length)
+        conn.endheaders()
+        resp = conn.getresponse()
+        assert resp.status == expected, length
+        assert "error" in json.loads(resp.read())
+        conn.close()
+
+
+def test_stream_stops_quietly_and_closes_when_the_page_disconnects():
+    from types import SimpleNamespace
+
+    from robot_times.local.api import Reply
+    from robot_times.local.server import make_handler
+
+    closed = []
+
+    def chunks():
+        try:
+            while True:
+                yield b"data: x\n\n"
+        finally:
+            closed.append(True)
+
+    class Gone:
+        def write(self, data):
+            raise ConnectionAbortedError(10053, "aborted by the software in your host machine")
+
+        def flush(self):
+            pass
+
+    fake = SimpleNamespace(
+        send_response=lambda status: None, send_header=lambda *a: None, end_headers=lambda: None,
+        wfile=Gone(),
+    )  # fmt: skip
+    handler = make_handler(make_api()[0])
+    handler._stream(fake, Reply(stream=chunks()))  # 不抛错
+    assert closed == [True]

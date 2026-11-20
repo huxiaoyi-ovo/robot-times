@@ -28,6 +28,7 @@ WEB_DIR = Path(
 )
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
+MAX_BODY = 1_000_000  # 看板发来的请求体上限（笔记最长 5 万字，远小于这个数）
 
 
 def make_handler(api: LocalApi, web_dir: Path = WEB_DIR) -> type[BaseHTTPRequestHandler]:
@@ -82,7 +83,14 @@ def make_handler(api: LocalApi, web_dir: Path = WEB_DIR) -> type[BaseHTTPRequest
                 self._json(Reply(200, {"ok": True}))
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
-            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if length < 0:
+                return self._json(Reply(400, {"error": L("请求格式不对。", "Bad request format.")}))
+            if length > MAX_BODY:  # 不读进内存，直接拒绝
+                return self._json(Reply(413, {"error": L("内容太长了。", "Too long.")}))
             body = self.rfile.read(length) if length else b""
             reply = api.handle(method, url.path, dict(parse_qsl(url.query)), body)
             if reply.stream is not None:
@@ -98,19 +106,29 @@ def make_handler(api: LocalApi, web_dir: Path = WEB_DIR) -> type[BaseHTTPRequest
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except ConnectionError:  # 页面在回复前关掉或刷新了
+                pass
 
         def _stream(self, reply: Reply) -> None:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
+            stream = reply.stream or iter(())
             try:
-                for chunk in reply.stream or []:
+                for chunk in stream:
                     self.wfile.write(chunk)
                     self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):  # 看板上点了“停”
+            except ConnectionError:
+                # 看板上点了“停”或关了页面。Windows 上是 ConnectionAbortedError，
+                # 以前只认 BrokenPipe / ConnectionReset，会在日志里刷一整段报错。
                 pass
+            finally:
+                close = getattr(stream, "close", None)
+                if close is not None:
+                    close()  # 马上断开到大模型的连接，不用等垃圾回收
 
         def _static(self, path: str) -> None:
             rel = path.lstrip("/") or "index.html"
@@ -128,7 +146,10 @@ def make_handler(api: LocalApi, web_dir: Path = WEB_DIR) -> type[BaseHTTPRequest
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except ConnectionError:
+                pass
 
     return Handler
 
