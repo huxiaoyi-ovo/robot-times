@@ -43,10 +43,17 @@ def hf_upvotes(
                 errors.append(f"{d.isoformat()}: {type(e).__name__} {str(e)[:120]}")
                 continue
             for item in items if isinstance(items, list) else []:
-                paper = item.get("paper", {}) if isinstance(item, dict) else {}
-                pid = str(paper.get("id", ""))
-                if pid:
-                    out[pid] = max(out.get(pid, 0), int(paper.get("upvotes", 0) or 0))
+                paper = item.get("paper") if isinstance(item, dict) else None
+                if not isinstance(paper, dict):
+                    continue
+                pid = paper.get("id")
+                if not isinstance(pid, str) or not pid:
+                    continue
+                try:
+                    upvotes = int(paper.get("upvotes") or 0)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                out[pid] = max(out.get(pid, 0), upvotes)
     if days and len(errors) == len(days):
         raise RuntimeError("；".join(errors))
     return out
