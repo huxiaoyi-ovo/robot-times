@@ -1759,8 +1759,18 @@ function libRows(list){
   return out.join("");
 }
 let libTimer=null, libSeq=0;
+function reloadLib(delay=0){
+  clearTimeout(libTimer);
+  ++libSeq;
+  Object.assign(S.lib,{list:null, total:0, loading:true});
+  const more=$("#lib-more"); if(more) more.disabled=true;
+  if(delay) libTimer=setTimeout(()=>loadLib(),delay);
+  else loadLib();
+}
 async function loadLib(append){
-  const L=S.lib, seq=++libSeq; L.loading=true;
+  const L=S.lib;
+  if(append&&L.loading) return;
+  const seq=++libSeq; L.loading=true;
   const off=append?(L.list||[]).length:0;
   try{
     const qs=new URLSearchParams({q:L.q, status:L.status, limit:"50", offset:String(off)});
@@ -2569,7 +2579,10 @@ document.addEventListener("click", e=>{
   if(d.skip){ setStatus(d.skip,"skip"); sendFeedback(d.skip,"skip",true); toast(t("已跳过，之后少推这类论文")); return; }
   if(d.unskip){ setStatus(d.unskip,"todo"); sendFeedback(d.unskip,"clear",true); return; }
   if(d.zadd){ addZotero(d.zadd); return; }
-  if(d.status!==undefined&&el.closest(".filters")){ S.lib.status=d.status; S.lib.list=null; render(); return; }
+  if(d.status!==undefined&&el.closest(".filters")){
+    if(S.lib.status!==d.status){ S.lib.status=d.status; reloadLib(); render(); }
+    return;
+  }
   if(d.st&&S.open){ setStatus(S.open, d.st); return; }
   if(d.flag&&S.open){ const f=new Set(noteOf(S.open).flags||[]); f.has(d.flag)?f.delete(d.flag):f.add(d.flag); patchNote(S.open,{flags:[...f]}); refreshReader(); return; }
   if(d.fb&&S.open) return sendFeedback(S.open, d.fb);
@@ -2595,7 +2608,7 @@ document.addEventListener("input", e=>{
   const el=e.target;
   if(el.id&&el.id.startsWith("su-")){ suDraft(); return; }
   if(el.id==="note-ta"&&S.open){ patchNote(S.open,{note:el.value},900); return; }
-  if(el.id==="lib-q"){ S.lib.q=el.value; clearTimeout(libTimer); libTimer=setTimeout(()=>loadLib(),300); return; }
+  if(el.id==="lib-q"){ S.lib.q=el.value; reloadLib(300); return; }
   if(el.id==="cfg-boot"){ api("/api/autostart",{method:"PUT", body:JSON.stringify({on:el.checked})}).then(r=>{ S.autostart=r.on; toast(r.on?t("开机后会自动在后台运行"):t("已关掉开机自动运行")); }).catch(e=>{ el.checked=!el.checked; toast(e); }); return; }
   if(el.id==="cfg-auto"){ api("/api/config",{method:"PUT", body:JSON.stringify({autoUpdate:el.checked})}).then(s=>{ S.settings=s; if(S.update) S.update.auto=el.checked; toast(el.checked?t("已打开自动更新"):t("已关掉自动更新")); }).catch(e=>toast(e)); return; }
   if(el.id==="cfg-div"){ $("#cfg-div-v").textContent=(+el.value).toFixed(1); return; }
