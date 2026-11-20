@@ -2310,7 +2310,7 @@ function watchReveal(root, scroller){
 }
 function openReader(id, focus, dir=1){
   const p=S.papers[id]; if(!p) return;
-  if(aiCtl) aiCtl.abort();
+  aiCtl?.abort(); aiCtl=null;
   clearTimeout(closeTimer);
   const fresh=!$("#reader")||$("#reader").classList.contains("closing");
   S.open=id; aiText="";
@@ -2356,7 +2356,7 @@ function refreshAnalysis(id){
   watchReveal($("#article"), $("#reader"));
 }
 function closeReader(){
-  if(aiCtl) aiCtl.abort();
+  aiCtl?.abort(); aiCtl=null;
   const id=S.open; S.open=null;
   const r=$("#reader"); if(!r) return;
   r.classList.add("closing"); document.body.classList.remove("drawer-on");
@@ -2461,17 +2461,23 @@ async function sendFeedback(id, action, quiet){
 
 /* ---------- 问 AI ---------- */
 async function runAI(kind){
-  const id=S.open, n=noteOf(id);
+  const id=S.open; if(!id) return;
+  const n=noteOf(id);
   if(kind==="check"&&!(n.note||"").trim()){ toast(t("先写几句笔记，再让 AI 检查。")); return; }
   const out=$("#ai-out"), stop=$("#ai-stop"), save=$("#ai-save"), ask=$("#ai-ask"), chk=$("#ai-check"), note=$("#ai-note");
-  aiCtl=new AbortController(); out.hidden=false; out.textContent=t("正在想…"); stop.hidden=false; save.hidden=true; ask.disabled=chk.disabled=true; note.textContent=""; aiText="";
+  aiCtl?.abort();
+  const ctl=new AbortController(); aiCtl=ctl;
+  const isCurrent=()=>aiCtl===ctl&&S.open===id;
+  out.hidden=false; out.textContent=t("正在想…"); stop.hidden=false; save.hidden=true; ask.disabled=chk.disabled=true; note.textContent=""; aiText="";
   try{
-    const resp=await fetch("/api/ask",{method:"POST", signal:aiCtl.signal, headers:{"content-type":"application/json", "x-lang":LANG},
+    const resp=await fetch("/api/ask",{method:"POST", signal:ctl.signal, headers:{"content-type":"application/json", "x-lang":LANG},
       body:JSON.stringify({paperId:id, kind, question:$("#ai-q").value.trim(), context:$("#ai-ctx").value, note:n.note||""})});
     if(!resp.ok){ let msg=`HTTP ${resp.status}`; try{ msg=(await resp.json()).error||msg; }catch{} throw new Error(msg); }
     const reader=resp.body.getReader(), dec=new TextDecoder(); let buf="";
     for(;;){
-      const {value, done}=await reader.read(); if(done) break;
+      const {value, done}=await reader.read();
+      if(!isCurrent()) return;
+      if(done) break;
       buf+=dec.decode(value,{stream:true});
       const lines=buf.split("\n"); buf=lines.pop();
       for(const line of lines){
@@ -2479,14 +2485,18 @@ async function runAI(kind){
         const data=line.slice(5).trim(); if(data==="[DONE]") continue;
         try{ aiText+=JSON.parse(data).choices?.[0]?.delta?.content||""; }catch{}
       }
-      if(S.open===id) out.textContent=aiText||t("正在想…");
+      out.textContent=aiText||t("正在想…");
     }
-    if(S.open===id&&aiText) save.hidden=false;
+    if(aiText) save.hidden=false;
   }catch(e){
-    if(S.open!==id) return;
+    if(!isCurrent()) return;
     if(e.name!=="AbortError") note.textContent=e.message||t("回答中断了，可以再试一次。");
     if(aiText) save.hidden=false; else out.hidden=true;
-  }finally{ if(S.open===id){ stop.hidden=true; ask.disabled=chk.disabled=false; } aiCtl=null; }
+  }finally{
+    if(isCurrent()){
+      stop.hidden=true; ask.disabled=chk.disabled=false; aiCtl=null;
+    }
+  }
 }
 
 /* ---------- 设置 ---------- */
