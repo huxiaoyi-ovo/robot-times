@@ -623,3 +623,25 @@ def test_daily_warns_when_fetch_hits_the_limit(monkeypatch):
     assert not run_daily(deps(SqliteStore(), papers=candidates()[:2])[0], SETTINGS, MONDAY)[
         "stats"
     ]["problems"]
+
+
+def test_weekly_keeps_only_text_in_headline_summary_and_trends():
+    store = SqliteStore()
+    day = run_daily(deps(store)[0], SETTINGS, MONDAY)
+    paper_id = day["picks"][0]
+
+    class OddLLM:
+        def complete(self, prompt, **kw):
+            return json.dumps({
+                "headline": ["本周", "人形"],
+                "summary": {"text": "不是字符串"},
+                "trends": [
+                    {"title": {"zh": "对象标题"}, "body": "整条丢掉", "paperIds": [paper_id]},
+                    {"title": "  正常标题 ", "body": ["列表正文"], "paperIds": [paper_id]},
+                ],
+            })  # fmt: skip
+
+    week = run_weekly(store, OddLLM(), SETTINGS, MONDAY)
+    assert week["headline"].startswith("本周推荐")  # 退回统计写的标题
+    assert week["summary"] == ""
+    assert week["trends"] == [{"title": "正常标题", "body": "", "paperIds": [paper_id]}]
