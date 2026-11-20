@@ -81,6 +81,13 @@ def test_ten_point_scale_is_rank_based():
     assert list(to_ten_point(np.array([0.1, 0.9, 0.5]))) == [0.0, 10.0, 5.0]
 
 
+def test_percentile_gives_equal_relevance_scores_equal_ranks():
+    assert to_ten_point(np.array([0.4, 0.1, 0.4, 0.9, 0.9])).tolist() == [
+        3.75, 0.0, 3.75, 8.75, 8.75,
+    ]  # fmt: skip
+    assert to_ten_point(np.zeros(4)).tolist() == [5.0] * 4
+
+
 def test_combine_skips_missing_parts():
     w = {"relevance": 0.5, "impact": 0.3, "buzz": 0.2}
     assert combine(8.0, None, None, w) == 8.0
