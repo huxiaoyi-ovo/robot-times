@@ -110,11 +110,18 @@ def run_weekly(
         except Exception as e:
             log.warning("LLM 写周报失败，只保存统计和计划：%s", e)
     valid = set(papers)
-    trends = [
-        {**t, "paperIds": [i for i in t.get("paperIds", []) if i in valid]}
-        for t in review.get("trends", [])
-        if isinstance(t, dict) and t.get("title")
-    ]
+    trends = []
+    raw_trends = review.get("trends")
+    if isinstance(raw_trends, list):
+        for trend in raw_trends:
+            if not isinstance(trend, dict) or not trend.get("title"):
+                continue
+            paper_ids = trend.get("paperIds")
+            if not isinstance(paper_ids, list):
+                paper_ids = []
+            trends.append(
+                {**trend, "paperIds": [i for i in paper_ids if isinstance(i, str) and i in valid]}
+            )
 
     next_monday = monday + timedelta(days=7)
     reading_first = [p["id"] for p in unread if notes.get(p["id"], {}).get("status") == "reading"]
