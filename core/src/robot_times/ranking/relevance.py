@@ -40,13 +40,15 @@ def raw_relevance(
 
 
 def to_ten_point(raw: np.ndarray) -> np.ndarray:
-    """按百分位换算成 0–10 分。"""
+    """按百分位换算成 0–10 分，并列的分数取平均名次。"""
     n = len(raw)
     if n == 0:
         return raw
     if n == 1:
         return np.array([10.0])
-    ranks = raw.argsort().argsort()
+    _, groups, counts = np.unique(raw, return_inverse=True, return_counts=True)
+    group_ranks = np.cumsum(counts) - (counts + 1) / 2
+    ranks = group_ranks[groups]
     return np.round(ranks / (n - 1) * 10.0, 2)
 
 
