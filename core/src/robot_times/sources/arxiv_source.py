@@ -79,11 +79,24 @@ def fetch_recent(
     return fetch_rss(categories, http=http)[:max_results]
 
 
+# 值得等一会儿再试的错误（按类名认，不用在这里导入 arxiv 和 requests）：
+# UnexpectedEmptyPageError 是 arXiv API 翻页时偶尔返回空页，arxiv 库自己重试几次后仍会抛出；
+# ChunkedEncodingError 是传到一半连接断了。
+RETRYABLE = (
+    "ConnectionError",
+    "Timeout",
+    "ReadTimeout",
+    "ConnectTimeout",
+    "UnexpectedEmptyPageError",
+    "ChunkedEncodingError",
+)
+
+
 def _throttled(e: Exception) -> bool:
-    """限流或临时连不上，值得等一会儿再试。"""
+    """限流、arXiv 临时返回空页或临时连不上，值得等一会儿再试。"""
     if getattr(e, "status", None) in (429, 500, 502, 503, 504):
         return True
-    return type(e).__name__ in ("ConnectionError", "Timeout", "ReadTimeout", "ConnectTimeout")
+    return type(e).__name__ in RETRYABLE
 
 
 def _fetch_api(
