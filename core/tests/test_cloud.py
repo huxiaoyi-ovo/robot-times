@@ -414,6 +414,35 @@ def test_weekly_without_llm_or_data():
     assert week["headline"].startswith("本周推荐 0 篇")
 
 
+def test_weekly_still_saves_when_model_returns_malformed_trends():
+    store = SqliteStore()
+    day = run_daily(deps(store)[0], SETTINGS, MONDAY)
+    paper_id = day["picks"][0]
+
+    class TrendLLM:
+        def __init__(self, trends):
+            self.trends = trends
+
+        def complete(self, prompt, **kw):
+            return json.dumps({"headline": "本周技术进展", "trends": self.trends})
+
+    malformed = [
+        {"title": "没有编号", "paperIds": None},
+        {"title": "有合法编号", "paperIds": [paper_id, {"id": paper_id}, "missing"]},
+    ]
+    for trends, expected in (
+        (None, []),
+        (malformed, [
+            {"title": "没有编号", "paperIds": []},
+            {"title": "有合法编号", "paperIds": [paper_id]},
+        ]),
+    ):  # fmt: skip
+        week = run_weekly(store, TrendLLM(trends), SETTINGS, MONDAY)
+        assert week["headline"] == "本周技术进展"
+        assert week["trends"] == expected
+        assert json.loads(store.rows("select data from weeks")[0]["data"]) == week
+
+
 def test_settings_roundtrip():
     store = SqliteStore()
     assert repo.load_settings(store, {"categories": ["cs.LG"]})["categories"] == ["cs.LG"]
