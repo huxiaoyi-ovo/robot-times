@@ -1242,7 +1242,7 @@ const EN = {
   "关闭":"Close",
   "关闭（Esc）":"Close (Esc)",
   "第 {i} 篇，共 {n} 篇":"{i} of {n}",
-  "解读没载入：":"The review didn't load: ",
+  "论文详情没载入：":"The paper details didn't load: ",
   "查看大图":"Enlarged figure",
   "缺 PDF":"PDF missing",
   "不在“{f}”里":"Not in “{f}”",
@@ -2251,6 +2251,7 @@ let aiCtl=null, aiText="", absLang="zh", closeTimer=null;
 const motionOK = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
 const paras = t => String(t||"").split(/\n\s*\n|\n/).map(x=>x.trim()).filter(Boolean).map(x=>`<p>${esc(x)}</p>`).join("");
 const full = {}; // 打开过的论文的完整数据（带解读）
+const readerPaper = id => full[id]&&S.papers[id] ? {...full[id], ...S.papers[id]} : S.papers[id];
 async function loadFull(id){
   if(full[id]) return full[id];
   const p=await api(`/api/paper/${encodeURIComponent(id)}`);
@@ -2283,7 +2284,7 @@ function absHtml(p){
     <p class="abs ${lang}">${esc(lang==="zh"?zh:(p.abstract||""))}</p></section>`;
 }
 function articleHtml(id){
-  const p=S.papers[id], n=noteOf(id), s=p.scores||{}, mode=TIER_MODE[p.tier];
+  const p=readerPaper(id), n=noteOf(id), s=p.scores||{}, mode=TIER_MODE[p.tier];
   const idx=S.order.indexOf(id), prev=S.order[idx-1], next=S.order[idx+1];
   let d=0; const st=()=>`style="--d:${(d++)*70}ms"`;
   return `<header class="hd">
@@ -2365,10 +2366,11 @@ function openReader(id, focus, dir=1){
   if(focus==="note"){ const ta=$("#note-ta"); setTimeout(()=>{ ta.scrollIntoView({block:"center", behavior:smooth()}); ta.focus({preventScroll:true}); }, fresh?420:0); }
   else r.querySelector("[data-close].ibtn").focus({preventScroll:true});
   if(S.zotero[id]) checkZotero(id);
-  if(p.hasAnalysis&&!p.analysis&&!full[id]) loadFull(id).then(()=>{ if(S.open===id) refreshAnalysis(id); }).catch(e=>{ if(S.open===id){ $("#analysis").innerHTML=`<p class="warn">${t("解读没载入：")}${esc(e.message)}</p>`; } });
+  // 列表仅在省略了摘要译文或解读时附带 hasAnalysis，可能为 false。
+  if(p.hasAnalysis!=null&&!full[id]) loadFull(id).then(()=>{ if(S.open===id) refreshAnalysis(id); }).catch(e=>{ if(S.open===id){ $("#analysis").innerHTML=`<p class="warn">${t("论文详情没载入：")}${esc(e.message)}</p>`; } });
 }
 function refreshAnalysis(id){
-  const p=S.papers[id], box=$("#analysis"); if(!box) return;
+  const p=readerPaper(id), box=$("#analysis"); if(!p||!box) return;
   box.innerHTML=analysisHtml(p);
   const zt=$(".zh-title"); if(!zt&&p.titleZh) $(".article h1").insertAdjacentHTML("afterend",`<p class="zh-title rv in">${esc(p.titleZh)}</p>`);
   const ab=$("#abs"); if(ab){ ab.outerHTML=absHtml(p); $("#abs").classList.add("in"); }
@@ -2384,7 +2386,7 @@ function closeReader(){
 }
 function navReader(d){ const i=S.order.indexOf(S.open)+d; if(i>=0&&i<S.order.length) openReader(S.order[i], undefined, d); }
 function openZoom(key){
-  const [i,j]=key.split(":").map(Number), f=S.papers[S.open]?.analysis?.figures?.[i]; if(!f) return;
+  const [i,j]=key.split(":").map(Number), f=readerPaper(S.open)?.analysis?.figures?.[i]; if(!f) return;
   const z=document.createElement("div"); z.className="zoom"; z.setAttribute("role","dialog"); z.setAttribute("aria-label",t("查看大图")); z.tabIndex=-1;
   z.innerHTML=`<img src="${esc(f.images[j])}" alt="${esc(f.label||"")}"><p>${esc(f.label||"")}　${esc(f.note||f.caption||"")}</p>`;
   const close=()=>{ z.classList.remove("on"); setTimeout(()=>z.remove(), motionOK()?300:0); document.removeEventListener("keydown",onKey,true); };
@@ -2598,7 +2600,7 @@ document.addEventListener("click", e=>{
   if(d.wx!==undefined){ openWxPop(el); return; }
   if(d.wxpick){ wxPlace(JSON.parse(d.wxpick)); closeWxPop(); liveWeather(true); toast(t("天气地点已记住")); return; }
   if(el.id==="wx-geo"){ wxPlace(null); closeWxPop(); liveWeather(true); toast(t("改回按你的位置显示天气")); return; }
-  if(d.abs&&S.open){ absLang=d.abs; const ab=$("#abs"); if(ab){ ab.outerHTML=absHtml(S.papers[S.open]); $("#abs").classList.add("in"); } return; }
+  if(d.abs&&S.open){ absLang=d.abs; const ab=$("#abs"); if(ab){ ab.outerHTML=absHtml(readerPaper(S.open)); $("#abs").classList.add("in"); } return; }
   if(d.jump){ const el=document.getElementById(d.jump); if(el) window.scrollTo({top:el.getBoundingClientRect().top+scrollY-64, behavior:smooth()}); return; }
   if(d.day){ S.dayIdx=Math.max(0,Math.min(S.days.length-1,S.dayIdx+ +d.day)); render(); return; }
   if(d.nday){ S.newsIdx=Math.max(0,Math.min(S.newsDates.length-1,S.newsIdx+ +d.nday)); render(); return; }
