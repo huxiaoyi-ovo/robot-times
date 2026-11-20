@@ -40,7 +40,7 @@ def analyze_papers(
     preset: dict[str, Any] | None = None,
 ) -> int:
     """返回这次新写了几篇。records 会被就地更新，已经带着解读的跳过。"""
-    todo = [rec for rec in records if force or not rec.get("analysis")]
+    todo = [rec for rec in records if force or not (rec.get("analysis") or {}).get("review")]
     if not todo:
         return 0
     log.info("写解读：%d 篇", len(todo))
