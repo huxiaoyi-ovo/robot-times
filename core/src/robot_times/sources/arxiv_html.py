@@ -23,7 +23,10 @@ UA = "robot-times/0.1 (personal paper digest)"
 MIN_INTERVAL = 3.1  # arXiv 要求每 3 秒最多 1 次请求
 TEXT_BUDGET = 30_000  # 交给大模型的正文最多多少字符
 MAX_FIGURES = 24
-SKIP_SECTIONS = re.compile(r"acknowledg|reference|bibliograph|致谢|contribution", re.I)
+SKIP_SECTIONS = re.compile(
+    r"(?:\backnowledg(?:e)?ments?|\breferences|\bbibliography|\bauthors?['’]?\s+contributions?|致谢)\s*[.:：]?$",
+    re.I,
+)
 _WS = re.compile(r"\s+")
 
 
