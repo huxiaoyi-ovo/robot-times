@@ -184,3 +184,28 @@ test("英文版：报错跟着 X-Lang，笔记、问 AI 和方向名跟着设置
   assert.match(style, /Write in English/);
   assert.doesNotMatch(style, /[一-鿿{}]/);
 });
+
+test("论文库搜索只看标题、作者、要点这些内容，不匹配字段名和网址", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const { readFileSync } = await import("node:fs");
+  const sqlite = new DatabaseSync(":memory:");
+  for (const f of ["0001_init.sql", "0002_news.sql"]) sqlite.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
+  const stmt = (sql, args = []) => ({
+    bind: (...a) => stmt(sql, a),
+    all: async () => ({ results: sqlite.prepare(sql).all(...args) }),
+    first: async () => sqlite.prepare(sql).get(...args) ?? null,
+    run: async () => (sqlite.prepare(sql).run(...args), {}),
+  });
+  const real = { ...env, DB: { prepare: (sql) => stmt(sql), batch: async (s) => Promise.all(s.map((x) => x.run())) } };
+  const add = (id, title) => sqlite.prepare("insert into papers (id, data, added_on, total) values (?, ?, '2026-10-26', 7)")
+    .run(id, JSON.stringify({ id, title, authors: ["Ada Lovelace"], summary: "要点", tier: "deep", url: `https://arxiv.org/abs/${id}`, scores: { total: 7 } }));
+  add("2610.00001", "Legged robots");
+  add("2610.00002", "Humanoid whole-body control");
+  const auth = { "cf-access-jwt-assertion": await token({}) };
+  const search = async (q) => (await (await worker.fetch(new Request(`https://x/api/papers?q=${encodeURIComponent(q)}`, { headers: auth }), real)).json());
+  for (const word of ["title", "scores", "arxiv", "deep"]) assert.equal((await search(word)).total, 0, word);
+  assert.deepEqual((await search("Legged")).papers.map((p) => p.id), ["2610.00001"]);
+  assert.equal((await search("2610.00002")).total, 1);
+  assert.equal((await search("Lovelace")).total, 2);
+  assert.equal((await search("要点")).total, 2);
+});

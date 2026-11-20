@@ -28,6 +28,14 @@ from ..zotero.local_api import ZoteroError, ZoteroLocalClient
 log = logging.getLogger("robot_times.local")
 
 STATUSES = {"todo", "reading", "done", "skip"}
+# 论文库搜索只看这些字段；直接搜整条 JSON 会连字段名、网址、分层一起匹配上
+# （搜 “title”“deep”“arxiv” 会把所有论文都搜出来）。和看板 Worker 的 SEARCH_TEXT 一样。
+SEARCH_FIELDS = ("title", "titleZh", "authors", "summary", "abstract", "topic")
+SEARCH_TEXT = (
+    "(p.id || char(10) || "
+    + " || char(10) || ".join(f"coalesce(json_extract(p.data, '$.{f}'), '')" for f in SEARCH_FIELDS)
+    + ")"
+)
 MAX_PDF = 40 * 1024 * 1024
 PDF_UA = "robot-times/0.1 (personal Zotero import)"
 
@@ -519,7 +527,8 @@ class LocalApi:
         offset = max(0, _int(q.get("offset"), 0))
         like = "%" + re.sub(r"[\\%_]", lambda c: "\\" + c.group(0), text) + "%"
         where = (
-            "(? = '' or p.data like ? escape '\\') and (? = '' or coalesce(n.status, 'todo') = ?)"
+            f"(? = '' or {SEARCH_TEXT} like ? escape '\\') "
+            "and (? = '' or coalesce(n.status, 'todo') = ?)"
         )
         args = [text, like, status, status]
         base = f"from papers p left join notes n on n.paper_id = p.id where {where}"
