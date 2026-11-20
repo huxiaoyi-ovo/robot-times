@@ -181,6 +181,15 @@ def test_bootstrap_notes_feedback_search_and_settings():
     _, found = call(api, "GET", "/api/papers", query={"q": "100%_"})
     assert found["total"] == 0
 
+    # 只搜标题、作者、要点这些内容，不会因为字段名、网址或分层匹配到所有论文
+    for word in ("title", "scores", "arxiv", "pdf", "deep"):
+        _, found = call(api, "GET", "/api/papers", query={"q": word})
+        assert found["total"] == 0, word
+    for word, pid in (("Legged", "2610.00001"), ("2610.00002", "2610.00002"), ("Lovelace", None)):
+        _, found = call(api, "GET", "/api/papers", query={"q": word})
+        assert found["total"] == (2 if pid is None else 1), word
+        assert pid is None or found["papers"][0]["id"] == pid
+
     status, s = call(api, "PUT", "/api/config", {"preset": "general", "siteName": "The Vision Times",
                                                   "categories": ["cs.CV"], "diversity": 0.3})  # fmt: skip
     assert status == 200 and s["categories"] == ["cs.CV"] and s["diversity"] == 0.3

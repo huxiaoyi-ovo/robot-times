@@ -317,6 +317,10 @@ async function bootstrap(env, who) {
   };
 }
 
+// 论文库搜索只看这些字段；直接搜整条 JSON 会连字段名、网址、分层一起匹配上。和本地版 api.py 的 SEARCH_TEXT 一样。
+const SEARCH_FIELDS = ["title", "titleZh", "authors", "summary", "abstract", "topic"];
+const SEARCH_TEXT = `(p.id || char(10) || ${SEARCH_FIELDS.map((f) => `coalesce(json_extract(p.data, '$.${f}'), '')`).join(" || char(10) || ")})`;
+
 async function searchPapers(env, q) {
   const text = (q.get("q") || "").trim().slice(0, 100);
   const status = q.get("status") || "";
@@ -324,7 +328,7 @@ async function searchPapers(env, q) {
   const limit = Math.min(100, Math.max(1, Number(q.get("limit")) || 50));
   const offset = Math.max(0, Number(q.get("offset")) || 0);
   const like = `%${text.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
-  const where = "(?1 = '' or p.data like ?2 escape '\\') and (?3 = '' or coalesce(n.status, 'todo') = ?3)";
+  const where = `(?1 = '' or ${SEARCH_TEXT} like ?2 escape '\\') and (?3 = '' or coalesce(n.status, 'todo') = ?3)`;
   const [rows, count] = await Promise.all([
     all(env, `select p.data from papers p left join notes n on n.paper_id = p.id where ${where} order by p.added_on desc, p.total desc limit ?4 offset ?5`, text, like, status, limit, offset),
     all(env, `select count(*) as n from papers p left join notes n on n.paper_id = p.id where ${where}`, text, like, status),
