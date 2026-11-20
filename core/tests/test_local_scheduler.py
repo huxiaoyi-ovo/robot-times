@@ -150,3 +150,34 @@ def test_daily_retries_when_zotero_drops_after_a_successful_probe(monkeypatch):
     now += timedelta(minutes=10)
     disconnected = False
     assert jobs.auto()["last"]["ok"]
+
+
+def test_slow_library_read_counts_as_an_attempt_instead_of_waiting(monkeypatch):
+    now = datetime(2026, 11, 20, 10, tzinfo=scheduler_jobs.TZ)
+    store = daily_due_store(now)
+    reads = []
+
+    def request(req):
+        headers = {"Zotero-Server-ID": "fixture"}
+        if req.url.path == "/api/":
+            return httpx.Response(200, headers=headers)
+        assert req.url.path == "/api/users/0/items/top"
+        reads.append(req)
+        raise httpx.ReadTimeout("fixture library read is slow", request=req)
+
+    monkeypatch.setattr(app, "llm_from_env", lambda: None)
+
+    zotero = ZoteroLocalClient(transport=httpx.MockTransport(request))
+    jobs = scheduler_jobs.Jobs(
+        store, app.make_runners(store, zotero), background=False, clock=lambda: now
+    )
+
+    first = jobs.auto()
+    assert not first["last"]["ok"]
+    assert "超时" in first["last"]["message"]
+    assert "daily" in repo.get_json(store, "local_runs")
+
+    # 还在重试间隔内：不再马上重跑
+    now += timedelta(minutes=10)
+    jobs.auto()
+    assert len(reads) == 1

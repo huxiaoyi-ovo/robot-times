@@ -120,11 +120,20 @@ class ZoteroLocalClient:
             params["limit"] = limit
         try:
             resp = self._http.get(self._url(f"{USER}/items/top"), params=params)
-        except (httpx.NetworkError, httpx.TimeoutException, httpx.RemoteProtocolError) as error:
+        except (httpx.NetworkError, httpx.ConnectTimeout, httpx.RemoteProtocolError) as error:
+            # 连不上或连接被断开：多半是 Zotero 关了，打开后就能接着生成
             raise ZoteroLibraryUnavailable(
                 L(
                     "连不上 Zotero：请确认 Zotero 已经打开。",
                     "Can't reach Zotero: make sure Zotero is open.",
+                )
+            ) from error
+        except httpx.TimeoutException as error:
+            # 连上了但读得太慢（文献库很大或 Zotero 卡住）：按普通失败算，走重试间隔，别当成没打开
+            raise ZoteroError(
+                L(
+                    "Zotero 读取文献库超时：Zotero 响应太慢。",
+                    "Reading the Zotero library timed out: Zotero responded too slowly.",
                 )
             ) from error
         self._check(resp, L("读取文献库", "Reading the library"))

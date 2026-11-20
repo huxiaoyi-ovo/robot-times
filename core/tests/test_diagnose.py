@@ -96,3 +96,13 @@ def test_export_backup_from_dashboard():
     api = LocalApi(SqliteStore())
     r = api.handle("GET", "/api/export", {}, b"")
     assert r.status == 200 and r.body["filename"].endswith(".sql") and "导出" in r.body["sql"]
+
+
+def test_slow_zotero_read_is_not_reported_as_closed():
+    for msg in (
+        "ZoteroError: Zotero 读取文献库超时：Zotero 响应太慢。",
+        "ZoteroError: Reading the Zotero library timed out: Zotero responded too slowly.",
+    ):
+        hit = diagnose.explain(msg, "daily")
+        assert hit["title"] in ("Zotero 响应太慢", "Zotero is responding too slowly")
+        assert hit["actions"][0] == "retry:daily"

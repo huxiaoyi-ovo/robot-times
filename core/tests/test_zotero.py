@@ -112,3 +112,23 @@ def test_written_papers_show_up_in_library():
     z.add_papers([a_paper()])
     titles = [it["data"]["title"] for it in z.top_items()]
     assert "Humanoid Mobility" in titles
+
+
+def test_library_read_errors_tell_closed_from_slow():
+    from robot_times.zotero.local_api import ZoteroLibraryUnavailable
+
+    def failing(error):
+        def handler(request):
+            if request.url.path == "/api/":
+                return httpx.Response(200, headers={"Zotero-Server-ID": "srv-1"})
+            raise error("fixture", request=request)
+
+        return ZoteroLocalClient(transport=httpx.MockTransport(handler))
+
+    with pytest.raises(ZoteroLibraryUnavailable):
+        failing(httpx.ConnectError).top_items()
+    with pytest.raises(ZoteroLibraryUnavailable):
+        failing(httpx.ConnectTimeout).top_items()
+    with pytest.raises(ZoteroError, match="超时") as slow:
+        failing(httpx.ReadTimeout).top_items()
+    assert not isinstance(slow.value, ZoteroLibraryUnavailable)
